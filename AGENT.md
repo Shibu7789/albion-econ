@@ -21,9 +21,10 @@ jour sans qu'il ait à intervenir.
    « corrigé le… » qui s'accumule.
 4. **Ne jamais publier un outil qui ne passe pas ses tests.** `bash pipeline/update.sh` doit finir par
    « Reconstruction terminée et testée. » avant tout `git push`.
-5. **Sécurité du joueur** : l'outil ne recommande que des actions en ville sûre (villes royales,
-   Caerleon, Brecilien), sans transport en zone rouge ou noire. La réserve d'argent du profil n'est
-   jamais engagée.
+5. **Sécurité du joueur** : transport de marchandise uniquement entre les 5 villes royales (Travel
+   Planner). Caerleon et Brecilien : achat, craft et vente sur place uniquement. Le Black Market et tout
+   trajet vers Caerleon sont réservés à la liste « sortie hebdomadaire en groupe ». La réserve d'argent
+   du profil n'est jamais engagée.
 6. **Sujets clos** : voir `notes/decisions.md`. Ne pas les relancer sans élément nouveau et sourcé.
 
 ## Routine hebdomadaire (tâche planifiée)
