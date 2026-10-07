@@ -192,4 +192,14 @@ t('Black Market : exclu de la liste du jour, seul dans la sortie hebdomadaire', 
   assert.strictEqual(E.evaluate(pr, ix, r, 0, 'Caerleon', false, Object.assign({}, pc, { blackMarket: false })).sellVenue, 'Caerleon');
   assert.strictEqual(E.evaluate(pr, ix, r, 0, 'Caerleon', false, Object.assign({}, pc, { blackMarket: 'only' })).sellVenue, 'Black Market');
 });
+t('planificateur : avec peu de capital, le rendement par argent investi passe avant le profit brut', () => {
+  const mk = (id, profit, cost) => ({ id, city: 'X', useFocus: false, profit, focus: 0, cost, amount: 1, sellVenue: 'X', ingredients: [] });
+  // Gros : 100 000 de profit pour 2,9 M investis ; Petits : 60 000 pour 300 000 chacun
+  const opps = [mk('GROS', 100000, 2.9e6), mk('P1', 60000, 3e5), mk('P2', 60000, 3e5), mk('P3', 60000, 3e5)];
+  const vol = { GROS: { X: 100 }, P1: { X: 100 }, P2: { X: 100 }, P3: { X: 100 } };
+  const pl = E.plan(opps, vol, Object.assign({}, prof, { capital: 3e6, maxShare: 1, liqShare: 0.01, minutes: 45, minutesPerLine: 5 }));
+  const ids = pl.lines.map(l => l.id);
+  assert.ok(!ids.includes('GROS') && ids.length === 3, 'les trois petites lignes : ' + ids);
+  near(pl.totalProfit, 180000, 1e-6, 'profit');
+});
 console.log(n, 'tests OK');

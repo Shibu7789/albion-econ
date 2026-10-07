@@ -317,7 +317,15 @@
       }
       for (const c of cand) c.perFocus = c.o.useFocus ? (c.o.profit - (noFocus[c.o.id + '|' + c.o.city] || 0)) / c.o.focus : 0;
       const focusCand = cand.filter(c => c.o.useFocus && c.perFocus > 0).sort((a, b) => b.perFocus - a.perFocus);
-      const plainCand = cand.filter(c => !c.o.useFocus).sort((a, b) => b.o.profit * b.nMax - a.o.profit * a.nMax);
+      // Lignes sans focus : classées par profit rapporté à la part de capital ET de temps de session qu'elles consomment.
+      // Avec peu de capital, une ligne qui rapporte beaucoup par argent investi passe devant une grosse ligne gourmande.
+      const slots = Math.max(1, Math.floor(prof.minutes / prof.minutesPerLine));
+      const capCapPlan = prof.capital * prof.maxShare;
+      for (const c of cand) {
+        const n0 = Math.max(0, Math.min(c.nMax, Math.floor(capCapPlan / c.o.cost)));
+        c.score = n0 > 0 ? (n0 * c.o.profit) / ((n0 * c.o.cost) / Math.max(1, prof.capital) + 1 / slots) : 0;
+      }
+      const plainCand = cand.filter(c => !c.o.useFocus && c.score > 0).sort((a, b) => b.score - a.score);
       cand.length = 0; cand.push(...focusCand, ...plainCand);
       const chosen = [], usedKey = new Set(), left = {};
       for (const { o, nMax } of cand) {

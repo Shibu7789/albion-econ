@@ -230,7 +230,7 @@
       .map(r => Object.assign({ soldAt: r.date, delayH: 0 }, r));   // anciennes entrées notées en une fois
     const locked = open.reduce((s, r) => s + r.cost, 0);
     $('#k-locked') && ($('#k-locked').textContent = locked ? `${fmtK(locked)} bloqués dans ${open.length} vente${open.length > 1 ? 's' : ''} en cours` : '');
-    if (!log.length) { box.innerHTML = '<p class="muted">Rien en cours. Quand tu as acheté et mis en vente une ligne, clique « Mis en vente » : elle apparaît ici. Quand tout est vendu, indique l\'argent reçu : l\'outil mesure ton profit réel et ton délai de vente.</p>'; $('#log-sum').textContent = ''; return; }
+    if (!log.length) { $('#progress').innerHTML = ''; box.innerHTML = '<p class="muted">Rien en cours. Quand tu as acheté et mis en vente une ligne, clique « Mis en vente » : elle apparaît ici. Quand tout est vendu, indique l\'argent reçu : l\'outil mesure ton profit réel et ton délai de vente.</p>'; $('#log-sum').textContent = ''; return; }
     let sum = '';
     if (sold.length) {
       const days = new Set(sold.map(r => r.soldAt.slice(0, 10))).size;
@@ -238,6 +238,17 @@
       const delay = sold.reduce((s, r) => s + r.delayH, 0) / sold.length;
       sum = `<b>${fmtK(real / days)}</b> de profit réel par jour (${days} jour${days > 1 ? 's' : ''} de ventes) · réalisé ${exp ? Math.round(real / exp * 100) : 0} % du prévu · délai de vente moyen <b>${delay < 24 ? Math.round(delay) + ' h' : (delay / 24).toFixed(1).replace('.', ',') + ' j'}</b>`;
     }
+    // Progression semaine par semaine (argent disponible relevé dans le profil + ce qui est en vente)
+    const caps = store.get('ae.capital.' + profiles.active, []);
+    const wk = d => { const t = new Date(d + 'T00:00:00Z'); const day = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - day); return t.toISOString().slice(0, 10); };
+    const weeks = {};
+    caps.forEach(c => { const w = wk(c.d); (weeks[w] = weeks[w] || { first: c.v, last: c.v }); weeks[w].last = c.v; });
+    sold.forEach(r => { const w = wk(r.soldAt.slice(0, 10)); (weeks[w] = weeks[w] || {}); weeks[w].profit = (weeks[w].profit || 0) + r.real; });
+    const wks = Object.keys(weeks).sort().reverse();
+    $('#progress').innerHTML = wks.length ? `<h3>Progression par semaine</h3><div class="scroll"><table><thead><tr><th>Semaine du</th><th class="r">Argent début</th><th class="r">Argent fin</th><th class="r">Évolution</th><th class="r">Profit éco réel</th></tr></thead><tbody>
+      ${wks.map(w => { const x = weeks[w]; const ev = x.first != null ? x.last - x.first : null;
+        return `<tr><td>${new Date(w).toLocaleDateString('fr-FR')}</td><td class="r">${fmtK(x.first)}</td><td class="r">${fmtK(x.last)}</td><td class="r ${ev > 0 ? 'pos' : ev < 0 ? 'neg' : ''}">${ev == null ? '—' : (ev > 0 ? '+' : '') + fmtK(ev)}</td><td class="r">${fmtK(x.profit || 0)}</td></tr>`; }).join('')}
+      </tbody></table></div><p class="muted small">L'évolution compte tout (éco, stuff perdu, ventes d'objets). Mets à jour ton argent disponible dans le profil à chaque session pour suivre la courbe.</p>` : '';
     $('#log-sum').innerHTML = (sum ? sum + '<br>' : '') + (locked ? `${fmtK(locked)} bloqués dans ${open.length} vente${open.length > 1 ? 's' : ''} en cours` : '');
     const ago = d => { const h = (Date.now() - Date.parse(d)) / 3.6e6; return h < 24 ? Math.round(h) + ' h' : (h / 24).toFixed(1).replace('.', ',') + ' j'; };
     box.innerHTML = (open.length ? `<h3>En vente</h3><div class="scroll"><table><thead><tr><th>Depuis</th><th>Objet</th><th>Vente à</th><th class="r">Investi</th><th class="r">Prévu</th><th>Argent reçu au total</th><th></th></tr></thead><tbody>
@@ -269,7 +280,15 @@
     });
     renderSpecs();
   }
+  // Relevé quotidien de l'argent disponible (un point par jour, le dernier saisi) : sert au suivi de progression
+  function snapCapital(bank) {
+    const k = 'ae.capital.' + profiles.active, h = store.get(k, []), d = new Date().toISOString().slice(0, 10);
+    const last = h[h.length - 1];
+    if (last && last.d === d) last.v = bank; else h.push({ d, v: bank });
+    store.set(k, h);
+  }
   function readProfileForm() {
+    const prevBank = prof().bank;
     updateProf({
       premium: $('#pf-premium').checked, focus: +$('#pf-focus').value || 0, bank: +$('#pf-bank').value || 0,
       reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value,
@@ -282,6 +301,7 @@
       maxShare: (+$('#pf-maxShare').value || 25) / 100, minMargin: (+$('#pf-minMargin').value || 0) / 100,
       minutesPerLine: +$('#pf-minutesPerLine').value || 5, minLineProfit: +$('#pf-minLineProfit').value || 0,
     });
+    if (prof().bank !== prevBank && prof().bank > 0) { snapCapital(prof().bank); renderLog(); }
     feeWarning();
   }
 
