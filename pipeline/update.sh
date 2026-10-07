@@ -28,7 +28,7 @@ python3 -I "$ROOT/pipeline/build_destiny.py" "$DUMP" "$BUILD/out"
 python3 -I "$ROOT/pipeline/build_app_data.py" "$DUMP" "$BUILD/out" "$ROOT/docs/data.js"
 
 # 3. Site
-cp "$ROOT/app/index.html" "$ROOT/app/engine.js" "$ROOT/app/market.js" "$ROOT/app/app.js" "$ROOT/docs/"
+cp "$ROOT/app/index.html" "$ROOT/app/engine.js" "$ROOT/app/market.js" "$ROOT/app/app.js" "$ROOT/app/preset.js" "$ROOT/docs/"
 touch "$ROOT/docs/.nojekyll"
 
 # 4. Tests (le moteur, puis la page dans un vrai navigateur avec des prix simulés)

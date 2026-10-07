@@ -51,6 +51,11 @@ function fakeHistory(url) {
   await page.route('https://fonts.googleapis.com/**', r => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
   await page.goto('file://' + path.join(__dirname, '..', 'docs', 'index.html'));
 
+  // Spés pré-renseignées appliquées au profil dès le chargement
+  const nSpecs = await page.evaluate(() => { const p = JSON.parse(localStorage.getItem('ae.profiles')); return Object.keys(p.list[p.active].specs).length; });
+  assert.ok(nSpecs >= 100, 'spés pré-renseignées : ' + nSpecs);
+  console.log('OK spés pré-renseignées :', nSpecs);
+
   // Profil : banque 60 M, réserve 10 M, focus 10 000, Lymhurst + Caerleon
   await page.click('[data-tab="profile"]');
   await page.fill('#pf-bank', '60000000'); await page.dispatchEvent('#pf-bank', 'change');

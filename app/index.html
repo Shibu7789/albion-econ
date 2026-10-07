@@ -179,7 +179,7 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
   <div class="card"><h3>Sauvegarde du profil</h3>
     <p class="muted small">Exporte un code pour le garder ou le recharger sur un autre navigateur. Colle un code puis Importer pour le charger.</p>
     <textarea id="pf-code" aria-label="Code du profil"></textarea>
-    <div class="row" style="margin-top:8px"><button class="ghost" id="pf-export" type="button">Exporter</button><button class="ghost" id="pf-import" type="button">Importer</button></div></div>
+    <div class="row" style="margin-top:8px"><button class="ghost" id="pf-export" type="button">Exporter</button><button class="ghost" id="pf-import" type="button">Importer</button><span id="pf-msg" class="muted" role="status"></span></div></div>
 </section>
 
 <section class="panel prose" id="p-about" hidden>
@@ -198,6 +198,7 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
 </section>
 </main>
 <script src="data.js"></script>
+<script src="preset.js"></script>
 <script src="engine.js"></script>
 <script src="market.js"></script>
 <script src="app.js"></script>

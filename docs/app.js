@@ -55,6 +55,15 @@
   };
   let profiles = store.get('ae.profiles', null);
   if (!profiles) profiles = { active: 'Principal', list: { Principal: JSON.parse(JSON.stringify(DEFAULT_PROFILE)) } };
+  // Spés pré-renseignées (preset.js) : ajoutées une fois à chaque profil, sans écraser ce qui est déjà saisi
+  if (window.ALBION_PRESET) {
+    for (const pr of Object.values(profiles.list)) {
+      if (pr.presetApplied) continue;
+      pr.specs = Object.assign({}, window.ALBION_PRESET.specs, pr.specs || {});
+      pr.presetApplied = true;
+    }
+    store.set('ae.profiles', profiles);
+  }
   const prof = () => Object.assign({}, DEFAULT_PROFILE, profiles.list[profiles.active]);
   const saveProfiles = () => store.set('ae.profiles', profiles);
   function updateProf(patch) { Object.assign(profiles.list[profiles.active], patch); saveProfiles(); }
@@ -255,15 +264,15 @@
     navigator.clipboard && navigator.clipboard.writeText(code).then(() => setStatus('Code du profil copié.', 'ok'), () => {});
   }
   function importProfile() {
+    const msg = t => { $('#pf-msg').textContent = t; };
     try {
-      const obj = JSON.parse(decodeURIComponent(escape(atob($('#pf-code').value.trim()))));
-      const name = obj.name || profiles.active;
-      // un profil existant garde ce que le code ne contient pas (banque, focus, villes…) ; les spés du code s'ajoutent
-      const cur = profiles.list[name] || JSON.parse(JSON.stringify(DEFAULT_PROFILE));
-      profiles.list[name] = Object.assign(cur, obj, { specs: Object.assign({}, cur.specs, obj.specs || {}) });
-      profiles.active = name; saveProfiles(); renderProfile(); feeWarning();
-      setStatus(`Profil « ${name} » importé.`, 'ok');
-    } catch (e) { setStatus('Code de profil illisible : recopie-le en entier.', 'err'); }
+      const obj = JSON.parse(decodeURIComponent(escape(atob($('#pf-code').value.replace(/\s+/g, '')))));
+      const cur = profiles.list[profiles.active];
+      delete obj.name;
+      Object.assign(cur, obj, { specs: Object.assign({}, cur.specs, obj.specs || {}) });
+      saveProfiles(); renderProfile();
+      msg(`Profil « ${profiles.active} » mis à jour : ${Object.keys(obj.specs || {}).length} spés importées.`);
+    } catch (e) { msg('Code illisible : recopie-le en entier, sans rien ajouter.'); }
   }
 
   /* ---------- Îles : travailleurs ---------- */
@@ -306,7 +315,8 @@
     $('#pf-new').addEventListener('click', () => {
       const name = ($('#pf-newname').value || '').trim();
       if (!name) { setStatus('Donne un nom au nouveau personnage.', 'warn'); return; }
-      profiles.list[name] = Object.assign(JSON.parse(JSON.stringify(DEFAULT_PROFILE)), { name });
+      profiles.list[name] = Object.assign(JSON.parse(JSON.stringify(DEFAULT_PROFILE)), { name, presetApplied: true,
+        specs: Object.assign({}, (window.ALBION_PRESET || {}).specs) });
       profiles.active = name; saveProfiles(); $('#pf-newname').value = ''; renderProfile();
     });
     $('#pf-export').addEventListener('click', exportProfile);
