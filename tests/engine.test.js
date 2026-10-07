@@ -184,4 +184,12 @@ t('Black Market : toujours vente directe, sans frais d\'ordre', () => {
   const pr = { X: { 'Black Market': P(0, 1000) } };
   near(E.dispose(pr, 'X', 'Black Market', Object.assign({}, prof, { mode: 'orders' })), 920, 1e-9, 'vente directe');
 });
+t('Black Market : exclu de la liste du jour, seul dans la sortie hebdomadaire', () => {
+  const ix = E.index.get('T4_MAIN_CURSEDSTAFF'); const r = DATA.items[ix].r[0];
+  const pr = { T4_PLANKS: { Caerleon: P(10, 9) }, T4_METALBAR: { Caerleon: P(10, 9) },
+    T4_MAIN_CURSEDSTAFF: { Caerleon: P(900, 500), 'Black Market': P(0, 800) } };
+  const pc = Object.assign({}, prof, { cities: ['Caerleon'] });
+  assert.strictEqual(E.evaluate(pr, ix, r, 0, 'Caerleon', false, Object.assign({}, pc, { blackMarket: false })).sellVenue, 'Caerleon');
+  assert.strictEqual(E.evaluate(pr, ix, r, 0, 'Caerleon', false, Object.assign({}, pc, { blackMarket: 'only' })).sellVenue, 'Black Market');
+});
 console.log(n, 'tests OK');

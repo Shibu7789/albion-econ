@@ -81,11 +81,13 @@
     // multiCity : acheter chaque ingrédient dans la ville la moins chère et vendre dans la meilleure,
     // en payant le transport (Travel Planner) au taux du profil sur la marchandise déplacée.
     function buyCities(craftCity, prof) { return prof.multiCity ? prof.cities : [craftCity]; }
-    function sellVenues(craftCity, prof) {
-      const base = prof.multiCity ? prof.cities.slice() : [craftCity];
-      if (base.includes('Caerleon')) base.push('Black Market');
-      return base;
+    // prof.blackMarket : true (par défaut), false (exclu), 'only' (sortie Black Market de la semaine)
+    function withBM(list, prof) {
+      const bmOk = prof.blackMarket !== false && ((prof.cities || CITIES).includes('Caerleon') || list.includes('Caerleon'));
+      if (prof.blackMarket === 'only') return bmOk ? ['Black Market'] : [];
+      return bmOk ? list.concat('Black Market') : list;
     }
+    function sellVenues(craftCity, prof) { return withBM(prof.multiCity ? prof.cities.slice() : [craftCity], prof); }
     const travelOf = (where, craftCity, prof) => (where === craftCity || (where === 'Black Market' && craftCity === 'Caerleon')) ? 0 : (prof.travelPct || 0);
     function bestBuy(prices, id, craftCity, prof) {
       let best = null;
@@ -212,8 +214,7 @@
           const buy = acquire(prices, item.id, city, prof);
           if (buy == null) continue;
           let best = null;
-          for (const v of cities.concat(cities.includes('Caerleon') ? ['Black Market'] : [])) {
-            if (v === city) continue;
+          for (const v of withBM(cities.filter(c => c !== city), prof)) {
             const n = dispose(prices, item.id, v, Object.assign({}, prof));
             if (n == null) continue;
             const net = n * (1 - travelOf(v, city, prof));
@@ -244,8 +245,7 @@
       for (const o of opps) {
         // vente
         let best = null;
-        const venues = o.flip ? prof.cities.concat(prof.cities.includes('Caerleon') ? ['Black Market'] : []).filter(v => v !== o.city)
-          : sellVenues(o.city, prof);
+        const venues = o.flip ? withBM(prof.cities.filter(v => v !== o.city), prof) : sellVenues(o.city, prof);
         for (const v of venues) {
           const h = H(o.id, v);
           if (!h || !(h.n > 0) || !(h.p > 0)) continue;

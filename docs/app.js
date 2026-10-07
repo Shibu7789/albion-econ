@@ -117,18 +117,27 @@
       const locs = p.cities.includes('Caerleon') ? p.cities.concat('Black Market') : p.cities.slice();
       setStatus(`Lecture des prix : ${need.size} objets, ${locs.length} marchés…`);
       const prices = await M.fetchPrices([...need], locs, { onProgress: (d, t) => setStatus(`Lecture des prix… ${d}/${t}`) });
-      const opps = E.opportunities(prices, p, filt).concat(doFlip ? E.flips(prices, p) : []);
+      // Liste du jour sans Black Market (trajet risqué) ; le Black Market a sa propre liste, pour une sortie par semaine
+      const pDay = Object.assign({}, p, { blackMarket: false });
+      const pBM = Object.assign({}, p, { blackMarket: 'only' });
+      const opps = E.opportunities(prices, pDay, filt).concat(doFlip ? E.flips(prices, pDay) : []);
+      const oppsBM = p.cities.includes('Caerleon') ? E.opportunities(prices, pBM, filt).concat(doFlip ? E.flips(prices, pBM) : []) : [];
       opps.sort((a, b) => b.profit - a.profit);
       // les 1 000 objets les plus prometteurs (toutes villes de craft confondues) passent au contrôle par l'historique
-      const keep = new Set();
+      oppsBM.sort((a, b) => b.profit - a.profit);
+      const keep = new Set(), keepBM = new Set();
       for (const o of opps) { if (keep.size >= 1000) break; keep.add(o.id); }
-      const top = opps.filter(o => keep.has(o.id));
+      for (const o of oppsBM) { if (keepBM.size >= 300) break; keepBM.add(o.id); }
+      const top = opps.filter(o => keep.has(o.id)), topBM = oppsBM.filter(o => keepBM.has(o.id));
       const vNeed = new Set();
-      top.forEach(o => { vNeed.add(o.id); o.ingredients.forEach(l => vNeed.add(l.id)); });
+      top.concat(topBM).forEach(o => { vNeed.add(o.id); o.ingredients.forEach(l => vNeed.add(l.id)); });
       setStatus(`Lecture des ventes des 7 derniers jours : ${vNeed.size} objets…`);
       const volumes = await M.fetchVolumes([...vNeed], locs, { onProgress: (d, t) => setStatus(`Lecture des ventes des 7 derniers jours… ${d}/${t}`) });
-      const checked = E.applyHistory(top, volumes, prices, p).sort((a, b) => b.profit - a.profit);
-      lastPlan = E.plan(checked, volumes, p);
+      const checked = E.applyHistory(top, volumes, prices, pDay).sort((a, b) => b.profit - a.profit);
+      lastPlan = E.plan(checked, volumes, pDay);
+      const checkedBM = E.applyHistory(topBM, volumes, prices, pBM).sort((a, b) => b.profit - a.profit);
+      // sortie hebdomadaire : quantités sur 7 jours de volume, pas de limite de temps de session
+      lastPlan.bm = E.plan(checkedBM, volumes, Object.assign({}, pBM, { liqShare: pBM.liqShare * 7, minutes: 1e6, focus: 0 }));
       lastPlan.diag = { found: opps.length, checked: checked.length };
       lastPlan.capitalAvail = p.capital;
       lastPlan.at = new Date().toISOString();
@@ -159,9 +168,12 @@
     const byCity = {};
     pl.lines.forEach((l, i) => { const g = (l.flip ? 'Revente — acheter à ' : 'Crafter à ') + l.city; (byCity[g] = byCity[g] || []).push([l, i]); });
     const p = prof();
+    const bm = pl.bm && pl.bm.lines.length ? `<section class="city"><h3>Sortie Black Market <span class="muted">une fois par semaine, en groupe · ${fmtK(pl.bm.totalProfit)} prévus pour ${fmtK(pl.bm.capitalUsed)} engagés</span></h3>
+      <p class="muted small">Trajet risqué (zones rouges autour de Caerleon) : ces lignes ne sont pas dans ta liste du jour. Quantités calculées sur une semaine de ventes.</p>
+      ${pl.bm.lines.map((l, k) => lineHTML(l, 'bm' + k, p)).join('')}</section>` : '';
     box.innerHTML = Object.entries(byCity).map(([city, ls]) => `
       <section class="city"><h3>${esc(city)} <span class="muted">${ls.length} ligne${ls.length > 1 ? 's' : ''}</span></h3>
-      ${ls.map(([l, i]) => lineHTML(l, i, p)).join('')}</section>`).join('');
+      ${ls.map(([l, i]) => lineHTML(l, i, p)).join('')}</section>`).join('') + bm;
   }
 
   function lineHTML(l, i, p) {
@@ -190,7 +202,7 @@
   /* ---------- Journal des résultats ---------- */
   const logKey = () => 'ae.log.' + profiles.active;
   function logLine(i) {
-    const l = lastPlan && lastPlan.lines[i]; if (!l) return;
+    const l = lastPlan && (String(i).startsWith('bm') ? lastPlan.bm && lastPlan.bm.lines[+String(i).slice(2)] : lastPlan.lines[i]); if (!l) return;
     const v = +$('#real-' + i).value;
     if (!$('#real-' + i).value) { setStatus('Indique l\'argent réellement reçu avant de noter.', 'warn'); return; }
     const log = store.get(logKey(), []);
@@ -322,7 +334,7 @@
     $$('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
     showTab(store.get('ae.tab', 'today'));
     $('#run').addEventListener('click', analyze);
-    $('#plan').addEventListener('click', e => { const b = e.target.closest('[data-log]'); if (b) logLine(+b.dataset.log); });
+    $('#plan').addEventListener('click', e => { const b = e.target.closest('[data-log]'); if (b) logLine(b.dataset.log.startsWith('bm') ? b.dataset.log : +b.dataset.log); });
     $('#p-profile').addEventListener('change', e => { if (e.target.dataset.spec !== undefined) {
       const v = e.target.value; const s = Object.assign({}, prof().specs);
       if (v === '' || +v === 0) delete s[e.target.dataset.spec]; else s[e.target.dataset.spec] = Math.max(0, Math.min(100, +v));
