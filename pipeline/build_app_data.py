@@ -100,6 +100,8 @@ for mid in ids:
          'cat': r['categorie'], 'sc': r['sous_cat1'], 'cc': r['categorie_craft'],
          'v': r['valeur_objet'], 'tr': 1 if r['echangeable'] else 0, 'q': r.get('qualite_max', 1),
          'w': r['poids']}
+    ft = (raw_items.get(mid.split('@')[0]) or {}).get('@fasttravelfactor')
+    if ft: e['ft'] = float(ft)                     # facteur de coût du Travel Planner (défaut 1)
     if r.get('nutrition'):
         e['nu'] = r['nutrition']; e['fc'] = r.get('categorie_aliment')
     if mid in targets:

@@ -51,7 +51,7 @@
   const DEFAULT_PROFILE = {
     name: 'Principal', premium: false, focus: 0, bank: 0, reserve: 10000000,
     cities: ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'],
-    multiCity: true, travelPct: 0.05, travelMinutes: 5, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
+    multiCity: true, travelMult: 1, travelMinutes: 5, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
     maxAge: 12, liqShare: 0.15, maxShare: 0.25, minMargin: 0.05, minutes: 45, minutesPerLine: 5,
     minLineProfit: 10000, stationFee: {}, dailyBonus: {}, specs: {},
   };
@@ -198,11 +198,11 @@
         ${l.chain && l.chain.length ? `<li><b>Préparer d'abord</b> <span class="muted">moins cher que d'acheter</span><ul>${l.chain.map(st => `<li>${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'}${st.focus ? ' <b>au focus</b>' : ''} <span class="q">${fmt(Math.ceil(st.qty * l.n))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span></li>`).join('')}</ul></li>` : ''}
         ${l.kind === 5 ? `<li><b>Recycler</b> ${fmt(l.n)} objet${l.n > 1 ? 's' : ''}</li>
           <li><b>Vendre les matières</b><ul>${l.outputs.map(x => `<li><span class="q">${fmt(x.units * l.n)}</span> ${esc(x.name)} <span class="muted">${x.venue !== l.city ? '· <b>' + esc(x.venue) + '</b>' : ''}</span></li>`).join('')}</ul></li>`
-          : l.kind === 4 ? `<li><b>Transporter</b> vers ${esc(l.sellVenue === 'Black Market' ? 'le Black Market (Caerleon)' : l.sellVenue)} <span class="muted">Travel Planner</span></li>`
+          : l.kind === 4 ? `<li><b>Transporter</b> vers ${esc(l.sellVenue === 'Black Market' ? 'le Black Market (Caerleon)' : l.sellVenue)} <span class="muted">Travel Planner ≈ ${fmt(E.tcost(l.id, l.city, l.sellVenue, p) * l.n)} argent</span></li>`
           : l.kind === 3 ? `<li><b>Améliorer</b> ${fmt(l.n)} fois à la station de la pièce</li>`
           : `<li><b>${l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter'}</b> ${fmt(l.n)} fois${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}${l.useFocus === 'all' ? ', toute la chaîne' : ''}</span>` : ''}
           ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
-        ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)) / (1 - (l.sellVenue !== l.city && !(bm && l.city === 'Caerleon') ? (p.travelPct || 0) : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
+        ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt((l.unitSell + E.tcost(l.id, l.city, l.sellVenue, p)) / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
       </ol>
       <footer><span class="muted">Investissement ${fmtK(l.totalCost)} · ${fmt(l.minutes || p.minutesPerLine)} min dans ta tournée${l.trips && l.trips.length ? ' · villes : ' + [l.city].concat(l.trips).map(esc).join(', ') : ''}</span>
         ${l.dailyVol ? `<span class="muted">Il s'en vend ${fmt(l.dailyVol)} par jour à ${esc(l.sellVenue)} : ta quantité = ${Math.max(1, Math.round(l.n * l.amount / l.dailyVol * 100))} % d'une journée de ventes</span>` : ''}
@@ -275,7 +275,7 @@
     $('#pf-premium').checked = !!p.premium;
     $('#pf-focus').value = p.focus; $('#pf-bank').value = p.bank; $('#pf-reserve').value = p.reserve;
     $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes;
-    $('#pf-multi').checked = !!p.multiCity; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = Math.round((p.travelPct || 0) * 1000) / 10;
+    $('#pf-multi').checked = !!p.multiCity; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = p.travelMult ?? 1;
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
     $('#pf-fees').innerHTML = E.CITIES.map(c => `<label class="field"><span>${c}</span><input type="number" data-fee="${c}" value="${p.stationFee[c] ?? ''}" placeholder="1000"></label>`).join('');
@@ -301,7 +301,7 @@
       premium: $('#pf-premium').checked, focus: +$('#pf-focus').value || 0, bank: +$('#pf-bank').value || 0,
       reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value,
       multiCity: $('#pf-multi').checked, salvageRound: $('#pf-salvround').value,
-      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, travelPct: (+$('#pf-travel').value || 0) / 100, minutes: +$('#pf-minutes').value || 45,
+      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45,
       cities: $$('#pf-cities input:checked').map(i => i.value), families: $$('#pf-families input:checked').map(i => i.value),
       stationFee: Object.fromEntries($$('[data-fee]').filter(i => i.value !== '').map(i => [i.dataset.fee, +i.value])),
       dailyBonus: Object.fromEntries($$('[data-daily]').filter(i => i.value !== '' && +i.value > 0)

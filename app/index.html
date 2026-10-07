@@ -166,10 +166,10 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
   <div class="card"><h3>Villes où tu acceptes d'agir</h3><div class="chips" id="pf-cities"></div>
     <div class="grid" style="margin-top:12px">
       <label class="chip" style="align-self:end"><input type="checkbox" id="pf-multi"> Acheter et vendre dans toutes ces villes (Travel Planner)</label>
-      <label class="field"><span>Coût du transport (% de la valeur déplacée)</span><input type="number" step="0.5" min="0" id="pf-travel"></label>
+      <label class="field"><span>Travel Planner : multiplicateur serveur</span><input type="number" step="0.05" min="0" id="pf-travel"></label>
       <label class="field"><span>Minutes par trajet entre deux villes</span><input type="number" min="0" id="pf-travelmin"></label>
     </div>
-    <p class="muted small">Le frais exact du Travel Planner n'est pas publié : la valeur par défaut (5 %) est une marge de prudence. Note le frais réel de ton premier trajet et ajuste.</p></div>
+    <p class="muted small">Frais du Travel Planner par objet = poids × facteur de voyage × 150 × multiplicateur, ×1 entre villes voisines, ×2 sinon (formule d'Albion Free Market, poids et facteurs tirés des fichiers du jeu). Le multiplicateur de l'Europe n'est pas publié : laisse 1 et compare avec le prix affiché au Travel Planner lors d'un trajet ; s'il diffère, mets prix réel ÷ prix calculé.</p></div>
   <div class="card"><h3>Activités à considérer</h3><div class="chips" id="pf-families"></div>
     <div class="grid" style="margin-top:12px"><label class="field"><span>Recyclage : quantités rendues</span><select id="pf-salvround">
       <option value="exact">20 % exact (prudent : 0,4 sceau compté 0,4)</option>

@@ -98,13 +98,24 @@
     function sellVenues(craftCity, prof) {
       return withBM(prof.multiCity ? prof.cities.slice() : [craftCity], prof).filter(v => linked(craftCity, v, prof));
     }
-    const travelOf = (where, craftCity, prof) => (where === craftCity || (where === 'Black Market' && craftCity === 'Caerleon')) ? 0 : (prof.travelPct || 0);
+    // Coût du Travel Planner par unité transportée (formule publiée par Albion Free Market, attributs officiels) :
+    // arrondi_sup(poids × facteur de voyage × 150 × multiplicateur serveur) × distance
+    // distance = 1 entre villes royales voisines, 2 sinon. Multiplicateur serveur : inconnu pour l'Europe (profil, défaut 1).
+    const ADJ = new Set(['Thetford|Fort Sterling', 'Fort Sterling|Lymhurst', 'Lymhurst|Bridgewatch', 'Bridgewatch|Martlock', 'Martlock|Thetford']);
+    function tcost(id, a, b, prof) {
+      if (!a || !b || a === b || a === 'Île' || b === 'Île') return 0;
+      if (!(ROYAL.has(a) && ROYAL.has(b))) return 0;              // trajet à pied (sortie hebdomadaire) : pas de frais
+      const it = items[index.get(id)]; if (!it) return 0;
+      const dist = ADJ.has(a + '|' + b) || ADJ.has(b + '|' + a) ? 1 : 2;
+      const mult = prof.travelMult != null ? prof.travelMult : 1;
+      return Math.ceil((it.w || 0) * (it.ft || 1) * 150 * mult) * dist;
+    }
     function bestBuy(prices, id, craftCity, prof) {
       let best = null;
       for (const c of buyCities(craftCity, prof)) {
         const p = acquire(prices, id, c, prof);
         if (p == null) continue;
-        const eff = p * (1 + travelOf(c, craftCity, prof));
+        const eff = p + tcost(id, c, craftCity, prof);
         if (!best || eff < best.price) best = { price: eff, city: c, raw: p };
       }
       return best;
@@ -114,7 +125,7 @@
       for (const v of sellVenues(craftCity, prof)) {
         const n = dispose(prices, id, v, prof);
         if (n == null) continue;
-        const eff = n * (1 - travelOf(v, craftCity, prof));
+        const eff = n - tcost(id, craftCity, v, prof);
         if (!best || eff > best.net) best = { venue: v, net: eff };
       }
       return best;
@@ -385,7 +396,7 @@
           for (const v of withBM(cities.filter(c => c !== city), prof).filter(v => linked(city, v, prof))) {
             const n = dispose(prices, item.id, v, Object.assign({}, prof));
             if (n == null) continue;
-            const net = n * (1 - travelOf(v, city, prof));
+            const net = n - tcost(item.id, city, v, prof);
             if (!best || net > best.net) best = { venue: v, net };
           }
           if (!best) continue;
@@ -465,7 +476,7 @@
             const h = H(x.id, x.venue);
             if (!h || !(h.n > 0) || !(h.p > 0)) continue;
             const f = x.venue === 'Black Market' ? salesTax(prof) : fees;
-            const cap = h.p * (1 - f) * (1 - travelOf(x.venue, o.city, prof));
+            const cap = h.p * (1 - f) - tcost(x.id, o.city, x.venue, prof);
             const net = Math.min(x.net, cap); if (net < x.net) capped = true;
             revenue += x.units * net; outs.push(Object.assign({}, x, { net }));
           }
@@ -483,9 +494,8 @@
           if (!h || !(h.n > 0) || !(h.p > 0)) continue;
           const cur = dispose(prices, o.id, v, prof);
           if (cur == null) continue;
-          const t = 1 - travelOf(v, o.city, prof);
           const f = v === 'Black Market' ? salesTax(prof) : fees;
-          const net = Math.min(cur, h.p * (1 - f)) * t;
+          const net = Math.min(cur, h.p * (1 - f)) - tcost(o.id, o.city, v, prof);
           if (!best || net > best.net) best = { venue: v, net, capped: cur > h.p * (1 - f) };
         }
         if (!best) continue;
@@ -500,11 +510,11 @@
             if (!h || !(h.n > 0)) continue;
             const p = acquire(prices, l.id, c, prof);
             if (p == null) continue;
-            const eff = p * (1 + travelOf(c, o.city, prof));
+            const eff = p + tcost(l.id, c, o.city, prof);
             if (!b || eff < b.eff) b = { eff, raw: p, city: c };
           }
           if (!b) { ok = false; return l; }
-          const prevEff = l.price * (1 + travelOf(l.city || o.city, o.city, prof));
+          const prevEff = l.price + tcost(l.id, l.city || o.city, o.city, prof);
           cost += l.effQty * (b.eff - prevEff);
           return Object.assign({}, l, { price: b.raw, city: b.city });
         });
@@ -613,7 +623,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, applyHistory, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, applyHistory, tcost, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

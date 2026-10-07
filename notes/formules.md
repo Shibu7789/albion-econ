@@ -14,10 +14,11 @@ Rapport complet : document « Économie d'Albion Online — fonctionnement compl
 | Qualité | chances de base 68,9 / 25 / 5 / 1 / 0,1 % ; profit calculé sur Normale | Officielle | gamedata CraftingQualityChances |
 | Frais de station | valeur d'objet × 0,1125 × prix pour 100 de nutrition / 100 | **Hypothèse** | gamedata ItemValueToNutrition |
 | Valeur d'objet | matériau : 2^(tier + enchant.) ; objet fabriqué : Σ valeurs des ingrédients / quantité produite | Officielle + formule tierce recoupée | items.json ; albionfreemarket.com |
+| Travel Planner | par objet : ceil(poids × fasttravelfactor × 150 × multiplicateur serveur) × distance ; distance 1 entre villes royales voisines (anneau TH–FS–LY–BW–MA), 2 sinon | Formule tierce ; poids et facteur officiels ; multiplicateur Europe **inconnu** (défaut 1) | albionfreemarket.com/teleport-calculator ; items.json (weight, fasttravelfactor) |
 | Travailleurs | butin = quantité de base × chances officielles d'enchantement | Officielle ; effet du bonheur **inconnu** | items.json (journalitem) |
 
 ## Inconnues à mesurer en jeu
 
 Conversion des points de qualité en chances ; argent rendu au recyclage ; frais de station exact ;
-frais du Travel Planner ; bonheur → rendement des travailleurs ; prix réel des graines, bébés, carnets
+multiplicateur serveur du Travel Planner ; bonheur → rendement des travailleurs ; prix réel des graines, bébés, carnets
 (suit l'or) ; bonus d'activité du jour (saisi chaque jour dans le profil).
