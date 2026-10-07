@@ -151,10 +151,22 @@ t('planificateur : le focus va à la meilleure rentabilité par point', () => {
 });
 t('garde-fou : prix de vente aberrant ramené au prix moyen des 7 jours', () => {
   const o = E.evaluate(prices, i5, rec, 1, 'Lymhurst', false, prof);       // vente à 600
-  const kept = E.applyHistory([o], { T5_CLOTH: { Lymhurst: { n: 100, p: 400 } } }, prof);
+  const H = (p) => ({ T5_CLOTH: { Lymhurst: { n: 100, p } }, T5_FIBER: { Lymhurst: { n: 1e4, p: 100 } }, T4_CLOTH: { Lymhurst: { n: 1e4, p: 200 } } });
+  const kept = E.applyHistory([o], H(400), prices, prof);
   assert.strictEqual(kept.length, 1); near(kept[0].unitSell, 400 * 0.92, 1e-9, 'plafonné'); assert.ok(kept[0].capped);
-  const gone = E.applyHistory([o], { T5_CLOTH: { Lymhurst: { n: 100, p: 300 } } }, prof);
+  const gone = E.applyHistory([o], H(300), prices, prof);
   assert.strictEqual(gone.length, 0, 'plus rentable une fois plafonné');
-  assert.strictEqual(E.applyHistory([o], {}, prof).length, 0, 'sans historique : écarté');
+  assert.strictEqual(E.applyHistory([o], {}, prices, prof).length, 0, 'sans historique : écarté');
+});
+t('garde-fou multi-villes : une ville au prix aberrant cède la place à une ville au prix normal', () => {
+  const pr = { T5_FIBER: { Lymhurst: P(100, 90) }, T4_CLOTH: { Lymhurst: P(200, 180) },
+    T5_CLOTH: { Lymhurst: P(650, 600), Martlock: P(99999, 50000) } };
+  const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Martlock'], multiCity: true, travelPct: 0 });
+  const o = E.evaluate(pr, i5, rec, 1, 'Lymhurst', false, pm);
+  assert.strictEqual(o.sellVenue, 'Martlock');                     // aux prix affichés : la ville aberrante
+  const vol = { T5_CLOTH: { Lymhurst: { n: 500, p: 610 }, Martlock: { n: 1, p: 500 } },
+    T5_FIBER: { Lymhurst: { n: 1e4, p: 100 } }, T4_CLOTH: { Lymhurst: { n: 1e4, p: 200 } } };
+  const [c] = E.applyHistory([o], vol, pr, pm);
+  assert.strictEqual(c.sellVenue, 'Lymhurst'); near(c.unitSell, 600 * 0.92, 1e-9, 'prix normal');
 });
 console.log(n, 'tests OK');

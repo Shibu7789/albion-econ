@@ -71,7 +71,9 @@
   async function fetchVolumes(ids, cities, opts = {}) {
     const f = opts.fetch || root.fetch.bind(root);
     const loc = encodeURIComponent(cities.join(','));
-    const suffix = `.json?locations=${loc}&time-scale=24&qualities=1`;
+    const d0 = new Date((opts.now || Date.now()) - 8 * 864e5);
+    const since = `${d0.getUTCMonth() + 1}-${d0.getUTCDate()}-${d0.getUTCFullYear()}`;
+    const suffix = `.json?locations=${loc}&time-scale=24&qualities=1&date=${since}`;
     const prefix = BASE + '/history/';
     const tasks = batches(ids, prefix, suffix).map(b => () => getJSON(prefix + b.map(encodeURIComponent).join(',') + suffix, f));
     const results = await runPool(tasks, 2, opts.onProgress);

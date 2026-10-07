@@ -202,17 +202,50 @@
     /* ---------- Garde-fou : prix de vente plafonné au prix moyen payé sur 7 jours ---------- */
     // Un ordre de vente isolé très au-dessus du marché (ou un vieux relevé) ne doit pas créer une fausse opportunité.
     const volN = v => v == null ? 0 : (typeof v === 'object' ? v.n : v);
-    function applyHistory(opps, volumes, prof) {
+    // Pour chaque opportunité : on refait le choix des villes avec l'historique des 7 jours.
+    //  - vente : dans la ville où le prix (plafonné au prix moyen payé) est le meilleur, s'il s'y vend quelque chose ;
+    //  - achat : chaque ingrédient dans la ville la moins chère où il s'échange réellement.
+    function applyHistory(opps, volumes, prices, prof) {
       const out = [];
+      const fees = salesTax(prof) + (prof.mode === 'orders' ? C.setupFee : 0);
+      const H = (id, c) => { const h = volumes[id] && volumes[id][c]; return h && typeof h === 'object' ? h : null; };
       for (const o of opps) {
-        const h = volumes[o.id] && volumes[o.id][o.sellVenue];
-        if (!h || typeof h !== 'object' || !(h.p > 0)) { if (h != null && typeof h !== 'object') out.push(o); continue; }
-        const fees = salesTax(prof) + (prof.mode === 'orders' ? C.setupFee : 0);
-        const cap = h.p * (1 - fees) * (1 - travelOf(o.sellVenue, o.city, prof));
-        if (o.unitSell <= cap) { out.push(o); continue; }
-        const revenue = cap * o.amount, profit = revenue - o.cost;
-        if (profit > 0 && profit / o.cost >= prof.minMargin)
-          out.push(Object.assign({}, o, { unitSell: cap, revenue, profit, margin: profit / o.cost, capped: true }));
+        // vente
+        let best = null;
+        for (const v of sellVenues(o.city, prof)) {
+          const h = H(o.id, v);
+          if (!h || !(h.n > 0) || !(h.p > 0)) continue;
+          const cur = dispose(prices, o.id, v, prof);
+          if (cur == null) continue;
+          const t = 1 - travelOf(v, o.city, prof);
+          const net = Math.min(cur, h.p * (1 - fees)) * t;
+          if (!best || net > best.net) best = { venue: v, net, capped: cur > h.p * (1 - fees) };
+        }
+        if (!best) continue;
+        // achat
+        const it = items[o.itemIdx];
+        const R = o.rrr;
+        let cost = o.cost, ok = true;
+        const lines = o.ingredients.map(l => {
+          let b = null;
+          for (const c of buyCities(o.city, prof)) {
+            const h = H(l.id, c);
+            if (!h || !(h.n > 0)) continue;
+            const p = acquire(prices, l.id, c, prof);
+            if (p == null) continue;
+            const eff = p * (1 + travelOf(c, o.city, prof));
+            if (!b || eff < b.eff) b = { eff, raw: p, city: c };
+          }
+          if (!b) { ok = false; return l; }
+          const prevEff = l.price * (1 + travelOf(l.city || o.city, o.city, prof));
+          cost += l.effQty * (b.eff - prevEff);
+          return Object.assign({}, l, { price: b.raw, city: b.city });
+        });
+        if (!ok) continue;
+        const revenue = best.net * o.amount, profit = revenue - cost;
+        if (profit > 0 && profit / cost >= prof.minMargin)
+          out.push(Object.assign({}, o, { sellVenue: best.venue, unitSell: best.net, revenue, cost, profit,
+            margin: profit / cost, ingredients: lines, capped: best.capped }));
       }
       return out;
     }

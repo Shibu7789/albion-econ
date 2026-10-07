@@ -111,18 +111,22 @@
       const prices = await M.fetchPrices([...need], locs, { onProgress: (d, t) => setStatus(`Lecture des prix… ${d}/${t}`) });
       const opps = E.opportunities(prices, p, filt);
       opps.sort((a, b) => b.profit - a.profit);
-      const top = opps.slice(0, 400);
+      // les 1 000 objets les plus prometteurs (toutes villes de craft confondues) passent au contrôle par l'historique
+      const keep = new Set();
+      for (const o of opps) { if (keep.size >= 1000) break; keep.add(o.id); }
+      const top = opps.filter(o => keep.has(o.id));
       const vNeed = new Set();
       top.forEach(o => { vNeed.add(o.id); o.ingredients.forEach(l => vNeed.add(l.id)); });
-      setStatus(`Lecture des volumes de vente : ${vNeed.size} objets…`);
-      const volumes = await M.fetchVolumes([...vNeed], locs, { onProgress: (d, t) => setStatus(`Lecture des volumes… ${d}/${t}`) });
-      const checked = E.applyHistory(top, volumes, p).sort((a, b) => b.profit - a.profit);
+      setStatus(`Lecture des ventes des 7 derniers jours : ${vNeed.size} objets…`);
+      const volumes = await M.fetchVolumes([...vNeed], locs, { onProgress: (d, t) => setStatus(`Lecture des ventes des 7 derniers jours… ${d}/${t}`) });
+      const checked = E.applyHistory(top, volumes, prices, p).sort((a, b) => b.profit - a.profit);
       lastPlan = E.plan(checked, volumes, p);
+      lastPlan.diag = { found: opps.length, checked: checked.length };
       lastPlan.at = new Date().toISOString();
       lastPlan.considered = opps.length;
       store.set('ae.lastPlan.' + profiles.active, lastPlan);
       renderPlan(lastPlan);
-      setStatus(`Analyse terminée : ${opps.length} opportunités rentables trouvées, ${lastPlan.lines.length} retenues.`, 'ok');
+      setStatus(`Analyse terminée : ${opps.length} recettes rentables aux prix affichés, ${checked.length} confirmées par les ventes réelles, ${lastPlan.lines.length} retenues.`, 'ok');
     } catch (e) {
       setStatus('Échec de la lecture des prix : ' + e.message + '. Vérifie ta connexion puis relance.', 'err');
     } finally { $('#run').disabled = false; }
@@ -131,7 +135,8 @@
   function renderPlan(pl) {
     const box = $('#plan');
     if (!pl || !pl.lines.length) {
-      box.innerHTML = `<div class="empty"><p>${pl ? 'Aucune ligne ne passe les filtres du jour (marge, liquidité, capital).' : 'Lance l\'analyse pour obtenir ta liste du jour.'}</p>
+      const d = pl && pl.diag;
+      box.innerHTML = `<div class="empty"><p>${pl ? (d ? `${fmt(d.found)} recettes rentables aux prix affichés, ${fmt(d.checked)} confirmées par les ventes des 7 derniers jours, aucune ne tient dans ton capital, ton focus et le profit minimal par ligne.` : 'Aucune ligne ne passe les filtres du jour.') : 'Lance l\'analyse pour obtenir ta liste du jour.'}</p>
         <p class="muted">L'outil lit les prix en direct, calcule chaque recette dans tes villes et garde les meilleures lignes que tu peux faire en ${fmt(prof().minutes)} minutes.</p></div>`;
       $('#kpis').hidden = true; return;
     }
