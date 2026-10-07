@@ -12,7 +12,7 @@
 (function (root) {
   'use strict';
 
-  const KIND_LABEL = ['Craft', 'Raffinage', 'Transmutation', 'Amélioration'];
+  const KIND_LABEL = ['Craft', 'Raffinage', 'Transmutation', 'Amélioration', 'Revente'];
   const CITIES = ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'];
 
   function createEngine(DATA) {
@@ -199,6 +199,37 @@
       return out;
     }
 
+    /* ---------- Revente entre villes (sans craft) ---------- */
+    // Acheter un objet dans une ville, le revendre dans une autre (ou au Black Market depuis Caerleon).
+    // city = ville d'achat ; le transport est compté sur la marchandise déplacée.
+    function flips(prices, prof, filter) {
+      const out = [];
+      const cities = prof.cities && prof.cities.length ? prof.cities : CITIES;
+      items.forEach((item, idx) => {
+        if (!item.tr || (filter && !filter(item)) || !prices[item.id]) return;
+        for (const city of cities) {
+          const buy = acquire(prices, item.id, city, prof);
+          if (buy == null) continue;
+          let best = null;
+          for (const v of cities.concat(cities.includes('Caerleon') ? ['Black Market'] : [])) {
+            if (v === city) continue;
+            const n = dispose(prices, item.id, v, Object.assign({}, prof));
+            if (n == null) continue;
+            const net = n * (1 - travelOf(v, city, prof));
+            if (!best || net > best.net) best = { venue: v, net };
+          }
+          if (!best) continue;
+          const profit = best.net - buy;
+          if (profit <= 0 || profit / buy < prof.minMargin) continue;
+          out.push({ itemIdx: idx, id: item.id, name: item.n, tier: item.t, ench: item.e, kind: 4, kindLabel: KIND_LABEL[4],
+            city, sellVenue: best.venue, useFocus: false, amount: 1, rrr: 0, cost: buy, revenue: best.net, profit,
+            margin: profit / buy, focus: 0, unitSell: best.net, quality: item.q > 1, flip: true,
+            ingredients: [{ id: item.id, name: item.n, qty: 1, price: buy, city, effQty: 1 }] });
+        }
+      });
+      return out;
+    }
+
     /* ---------- Garde-fou : prix de vente plafonné au prix moyen payé sur 7 jours ---------- */
     // Un ordre de vente isolé très au-dessus du marché (ou un vieux relevé) ne doit pas créer une fausse opportunité.
     const volN = v => v == null ? 0 : (typeof v === 'object' ? v.n : v);
@@ -212,7 +243,9 @@
       for (const o of opps) {
         // vente
         let best = null;
-        for (const v of sellVenues(o.city, prof)) {
+        const venues = o.flip ? prof.cities.concat(prof.cities.includes('Caerleon') ? ['Black Market'] : []).filter(v => v !== o.city)
+          : sellVenues(o.city, prof);
+        for (const v of venues) {
           const h = H(o.id, v);
           if (!h || !(h.n > 0) || !(h.p > 0)) continue;
           const cur = dispose(prices, o.id, v, prof);
@@ -228,7 +261,7 @@
         let cost = o.cost, ok = true;
         const lines = o.ingredients.map(l => {
           let b = null;
-          for (const c of buyCities(o.city, prof)) {
+          for (const c of (o.flip ? [o.city] : buyCities(o.city, prof))) {
             const h = H(l.id, c);
             if (!h || !(h.n > 0)) continue;
             const p = acquire(prices, l.id, c, prof);
@@ -331,7 +364,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, applyHistory, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, applyHistory, flips, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

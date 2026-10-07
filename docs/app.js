@@ -28,6 +28,7 @@
     { key: 'gear', label: 'Sacs, capes, outils', test: it => ['bags', 'capes', 'tools', 'gatherergear'].includes(it.cat) || it.cc === 'gatherergear' || it.cc === 'tools' },
     { key: 'mount', label: 'Montures', test: it => it.cat === 'mounts' },
     { key: 'up', label: 'Amélioration (runes, âmes, reliques)', test: it => !!it.up },
+    { key: 'flip', label: 'Revente entre villes (sans craft)', test: () => false },
     { key: 'other', label: 'Autres (artefacts, cartes…)', test: it => ['artefacts', 'other', 'crafting', 'gathering'].includes(it.cat) },
   ];
   function familyOf(it) { const f = FAMILIES.find(f => f.key !== 'up' && f.key !== 'raff' && f.key !== 'trans' && f.test(it)); return f ? f.key : 'other'; }
@@ -49,7 +50,7 @@
   const DEFAULT_PROFILE = {
     name: 'Principal', premium: false, focus: 0, bank: 0, reserve: 10000000,
     cities: ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'],
-    multiCity: true, travelPct: 0.05, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans'],
+    multiCity: true, travelPct: 0.05, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip'],
     maxAge: 12, liqShare: 0.15, maxShare: 0.25, minMargin: 0.05, minutes: 45, minutesPerLine: 5,
     minLineProfit: 10000, stationFee: {}, dailyBonus: {}, specs: {},
   };
@@ -64,6 +65,11 @@
     }
     store.set('ae.profiles', profiles);
   }
+  // Nouvelle activité « Revente » : activée une fois dans les profils existants
+  for (const pr of Object.values(profiles.list)) {
+    if (pr.families && !pr.flipAdded) { if (!pr.families.includes('flip')) pr.families.push('flip'); pr.flipAdded = true; }
+  }
+  store.set('ae.profiles', profiles);
   const prof = () => Object.assign({}, DEFAULT_PROFILE, profiles.list[profiles.active]);
   const saveProfiles = () => store.set('ae.profiles', profiles);
   function updateProf(patch) { Object.assign(profiles.list[profiles.active], patch); saveProfiles(); }
@@ -99,8 +105,10 @@
     $('#plan').innerHTML = '<div class="empty"><p>Analyse en cours : lecture des prix et calcul de chaque recette…</p></div>'; $('#kpis').hidden = true;
     try {
       const filt = itemFilter(p);
+      const doFlip = p.families.includes('flip');
       const need = new Set();
       DATA.items.forEach(it => {
+        if (it.tr && doFlip && (it.t >= 4 || it.cat === 'treasures')) need.add(it.id);
         if (!it.tr || !filt(it)) return;
         need.add(it.id);
         (it.r || []).forEach(r => r[4].forEach(([ii]) => need.add(DATA.items[ii].id)));
@@ -109,7 +117,7 @@
       const locs = p.cities.includes('Caerleon') ? p.cities.concat('Black Market') : p.cities.slice();
       setStatus(`Lecture des prix : ${need.size} objets, ${locs.length} marchés…`);
       const prices = await M.fetchPrices([...need], locs, { onProgress: (d, t) => setStatus(`Lecture des prix… ${d}/${t}`) });
-      const opps = E.opportunities(prices, p, filt);
+      const opps = E.opportunities(prices, p, filt).concat(doFlip ? E.flips(prices, p) : []);
       opps.sort((a, b) => b.profit - a.profit);
       // les 1 000 objets les plus prometteurs (toutes villes de craft confondues) passent au contrôle par l'historique
       const keep = new Set();
@@ -147,10 +155,10 @@
     $('#k-time').textContent = fmt(pl.minutesUsed) + ' min';
     $('#k-at').textContent = new Date(pl.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
     const byCity = {};
-    pl.lines.forEach((l, i) => { (byCity[l.city] = byCity[l.city] || []).push([l, i]); });
+    pl.lines.forEach((l, i) => { const g = (l.flip ? 'Revente — acheter à ' : 'Crafter à ') + l.city; (byCity[g] = byCity[g] || []).push([l, i]); });
     const p = prof();
     box.innerHTML = Object.entries(byCity).map(([city, ls]) => `
-      <section class="city"><h3>Crafter à ${esc(city)} <span class="muted">${ls.length} ligne${ls.length > 1 ? 's' : ''}</span></h3>
+      <section class="city"><h3>${esc(city)} <span class="muted">${ls.length} ligne${ls.length > 1 ? 's' : ''}</span></h3>
       ${ls.map(([l, i]) => lineHTML(l, i, p)).join('')}</section>`).join('');
   }
 
@@ -165,7 +173,8 @@
         <div class="gain"><b>+${fmtK(l.totalProfit)}</b><span class="muted">marge ${Math.round(l.margin * 100)} %</span></div></header>
       <ol class="steps">
         <li><b>${buyVerb}</b><ul>${ings}</ul></li>
-        ${l.kind === 3 ? `<li><b>Améliorer</b> ${fmt(l.n)} fois à la station de la pièce</li>`
+        ${l.kind === 4 ? `<li><b>Transporter</b> vers ${esc(l.sellVenue === 'Black Market' ? 'le Black Market (Caerleon)' : l.sellVenue)} <span class="muted">Travel Planner</span></li>`
+          : l.kind === 3 ? `<li><b>Améliorer</b> ${fmt(l.n)} fois à la station de la pièce</li>`
           : `<li><b>${l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter'}</b> ${fmt(l.n)} fois${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}
           ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
         <li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>

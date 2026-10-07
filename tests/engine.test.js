@@ -169,4 +169,15 @@ t('garde-fou multi-villes : une ville au prix aberrant cède la place à une vil
   const [c] = E.applyHistory([o], vol, pr, pm);
   assert.strictEqual(c.sellVenue, 'Lymhurst'); near(c.unitSell, 600 * 0.92, 1e-9, 'prix normal');
 });
+t('revente : achat dans une ville, vente directe dans une autre, transport compté', () => {
+  const pr = { T5_CLOTH: { Lymhurst: P(500, 450), Martlock: P(900, 800) } };
+  const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Martlock'], multiCity: true, travelPct: 0.05 });
+  const f = E.flips(pr, pm, it => it.id === 'T5_CLOTH');
+  const o = f.find(x => x.city === 'Lymhurst');
+  assert.strictEqual(o.sellVenue, 'Martlock'); near(o.cost, 500, 1e-9, 'achat');
+  near(o.revenue, 800 * 0.92 * 0.95, 1e-9, 'vente nette'); assert.ok(!f.some(x => x.city === 'Martlock'), 'pas de revente perdante');
+  const vol = { T5_CLOTH: { Lymhurst: { n: 1000, p: 520 }, Martlock: { n: 1000, p: 850 } } };
+  const [c] = E.applyHistory([o], vol, pr, pm);
+  assert.strictEqual(c.sellVenue, 'Martlock'); assert.strictEqual(c.ingredients[0].city, 'Lymhurst');
+});
 console.log(n, 'tests OK');
