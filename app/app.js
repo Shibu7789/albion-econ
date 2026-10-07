@@ -96,6 +96,7 @@
     if (!p.cities.length) return setStatus('Choisis au moins une ville dans le profil.', 'warn');
     if (p.capital <= 0) return setStatus('Capital investissable nul : indique ta banque dans le profil (elle doit dépasser la réserve).', 'warn');
     $('#run').disabled = true;
+    $('#plan').innerHTML = '<div class="empty"><p>Analyse en cours : lecture des prix et calcul de chaque recette…</p></div>'; $('#kpis').hidden = true;
     try {
       const filt = itemFilter(p);
       const need = new Set();
@@ -245,8 +246,8 @@
       const vis = ns.filter(n => !q || n.n.toLowerCase().includes(q) || name.toLowerCase().includes(q));
       if (!vis.length) return '';
       const filled = ns.filter(n => p.specs[n.id]).length;
-      return `<details ${q ? 'open' : ''}><summary>${esc(name)} <span class="muted">${filled}/${ns.length} renseignés</span></summary>
-        <div class="specgrid">${vis.map(n => `<label class="field"><span>${esc(n.n)}</span><input type="number" min="0" max="100" data-spec="${n.id}" value="${p.specs[n.id] ?? ''}" placeholder="0"></label>`).join('')}</div></details>`;
+      return `<details ${q ? 'open' : ''}><summary>${esc(name)} <span class="muted">${filled ? filled + ' investi' + (filled > 1 ? 's' : '') + ' sur ' + ns.length : 'tout à 0'}</span></summary>
+        <div class="specgrid">${vis.map(n => `<label class="field"><span>${esc(n.n)}</span><input type="number" min="0" max="100" data-spec="${n.id}" value="${p.specs[n.id] ?? 0}"></label>`).join('')}</div></details>`;
     }).join('');
     $('#specs').innerHTML = html || '<p class="muted">Aucun nœud ne correspond.</p>';
   }
