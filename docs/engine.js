@@ -110,6 +110,72 @@
       return best;
     }
 
+    /* ---------- Chaînes de production : fabriquer un ingrédient au lieu de l'acheter ---------- */
+    // makeCost : coût par unité d'un matériau produit soi-même dans la ville de craft (raffinage, transmutation),
+    // ses propres ingrédients étant eux-mêmes achetés ou produits (3 niveaux au plus), sans focus (prudent).
+    let MEMO = null, MEMO_KEY = null;
+    function memo(prices, prof) {
+      if (MEMO_KEY !== prices || MEMO_PROF !== prof) { MEMO = new Map(); MEMO_KEY = prices; MEMO_PROF = prof; }
+      return MEMO;
+    }
+    let MEMO_PROF = null;
+    function unitCost(prices, ii, city, prof, depth) {
+      const b = bestBuy(prices, items[ii].id, city, prof);
+      const m = prof.chains === false ? null : makeCost(prices, ii, city, prof, depth);
+      if (m && (!b || m.cost < b.price)) return m;
+      return b ? { cost: b.price, buy: b } : null;
+    }
+    function makeCost(prices, idx, city, prof, depth) {
+      if (depth > 3) return null;
+      const M = memo(prices, prof), key = idx + '|' + city + '|' + depth;
+      if (M.has(key)) return M.get(key);
+      M.set(key, null);                                   // garde-fou contre les boucles
+      const item = items[idx];
+      let best = null;
+      for (const rec of item.r || []) {
+        const kind = rec[3];
+        if (kind !== 1 && kind !== 2) continue;           // seulement raffinage et transmutation
+        const [silver, , amount, , ings] = rec;
+        const R = rrr(productionBonus(item, kind, city, false, prof.dailyBonus && prof.dailyBonus[city]));
+        let cost = silver || 0; const leaves = [], steps = [];
+        let ok = true;
+        for (const [ii, qty, noret] of ings) {
+          const eff = noret ? qty : qty * (1 - R);
+          const u = unitCost(prices, ii, city, prof, depth + 1);
+          if (!u) { ok = false; break; }
+          cost += eff * u.cost;
+          if (u.buy) leaves.push({ id: items[ii].id, name: items[ii].n, price: u.buy.raw, city: u.buy.city, effQty: eff });
+          else {
+            u.leaves.forEach(l => leaves.push(Object.assign({}, l, { effQty: l.effQty * eff })));
+            u.steps.forEach(st => steps.push(Object.assign({}, st, { qty: st.qty * eff })));
+          }
+        }
+        if (!ok) continue;
+        cost += stationFee(item, amount, city, prof);
+        const per = cost / amount;
+        if (!best || per < best.cost) {
+          best = { cost: per,
+            leaves: leaves.map(l => Object.assign({}, l, { effQty: l.effQty / amount })),
+            steps: steps.map(st => Object.assign({}, st, { qty: st.qty / amount }))
+              .concat([{ id: item.id, name: item.n, tier: item.t, ench: item.e, kind, kindLabel: KIND_LABEL[kind], qty: 1 }]) };
+        }
+      }
+      M.set(key, best);
+      return best;
+    }
+
+    // regroupe les achats identiques (même objet, même ville) et les étapes identiques
+    function mergeLines(lines) {
+      const m = new Map();
+      for (const l of lines) { const k = l.id + '|' + l.city; const x = m.get(k); if (x) { x.effQty += l.effQty; x.qty += l.qty; } else m.set(k, Object.assign({}, l)); }
+      return [...m.values()];
+    }
+    function mergeSteps(steps) {
+      const m = new Map();
+      for (const st of steps) { const x = m.get(st.id); if (x) x.qty += st.qty; else m.set(st.id, Object.assign({}, st)); }
+      return [...m.values()].sort((a, b) => a.tier - b.tier || a.ench - b.ench);
+    }
+
     /* ---------- Évaluation d'une recette dans une ville ---------- */
     function stationFee(item, amount, city, prof) {
       // prix saisi par le joueur, sinon le plafond officiel (maxuseagefee) : estimation prudente
@@ -127,13 +193,18 @@
       const R = rrr(B);
       let cost = silver || 0;
       const lines = [];
+      const chain = [];
       for (const [ii, qty, noret] of ings) {
         const ing = items[ii];
-        const b = bestBuy(prices, ing.id, city, prof);
-        if (!b) return null;
         const eff = noret ? qty : qty * (1 - R);
-        cost += eff * b.price;
-        lines.push({ id: ing.id, name: ing.n, qty, price: b.raw, city: b.city, effQty: eff });
+        const u = unitCost(prices, ii, city, prof, 1);
+        if (!u) return null;
+        cost += eff * u.cost;
+        if (u.buy) lines.push({ id: ing.id, name: ing.n, qty, price: u.buy.raw, city: u.buy.city, effQty: eff });
+        else {
+          u.leaves.forEach(l => lines.push(Object.assign({}, l, { qty: l.effQty * eff, effQty: l.effQty * eff })));
+          u.steps.forEach(st => chain.push(Object.assign({}, st, { qty: st.qty * eff })));
+        }
       }
       cost += stationFee(item, amount, city, prof);
       const best = bestSell(prices, item.id, city, prof);
@@ -144,7 +215,7 @@
       return {
         itemIdx, id: item.id, name: item.n, tier: item.t, ench: item.e, kind, kindLabel: KIND_LABEL[kind],
         city, sellVenue: best.venue, useFocus, amount, rrr: R, cost, revenue, profit: revenue - cost,
-        margin: cost > 0 ? (revenue - cost) / cost : 0, focus, ingredients: lines,
+        margin: cost > 0 ? (revenue - cost) / cost : 0, focus, ingredients: mergeLines(lines), chain: mergeSteps(chain),
         unitSell: best.net, quality: item.q > 1,
       };
     }

@@ -210,4 +210,16 @@ t('recyclage : carte d\'expédition D1 → 20 % de 2 sceaux, exact ou arrondi', 
   const ce = E.salvageEval(pr, ix, 'Lymhurst', Object.assign({}, prof, { salvageRound: 'ceil' }));
   near(ce.revenue, 1 * 47000 * 0.92, 1e-6, 'arrondi'); assert.ok(ce.profit > 0);
 });
+t('chaîne : le tissu T4 produit soi-même s\'il revient moins cher que son prix de marché', () => {
+  const pr = { T5_FIBER: { Lymhurst: P(100, 90) }, T4_FIBER: { Lymhurst: P(20, 18) }, T3_CLOTH: { Lymhurst: P(30, 25) },
+    T4_CLOTH: { Lymhurst: P(500, 450) }, T5_CLOTH: { Lymhurst: P(900, 850) } };
+  const o = E.evaluate(pr, i5, rec, 1, 'Lymhurst', false, prof);
+  const R = 0.58 / 1.58;
+  const t4 = (2 * 20 + 30) * (1 - R) + DATA.items[E.index.get('T4_CLOTH')].v * 0.1125 * 0 ;   // frais de station à 0 dans ce profil
+  near(o.cost, (3 * 100 + t4) * (1 - R), 1e-6, 'coût avec T4 fabriqué');
+  assert.ok(o.chain.some(st => st.id === 'T4_CLOTH'), 'étape : raffiner le T4');
+  assert.ok(o.ingredients.some(l => l.id === 'T4_FIBER') && !o.ingredients.some(l => l.id === 'T4_CLOTH'), 'achats : fibre T4, pas de tissu T4');
+  const sans = E.evaluate(pr, i5, rec, 1, 'Lymhurst', false, Object.assign({}, prof, { chains: false }));
+  near(sans.cost, (3 * 100 + 500) * (1 - R), 1e-6, 'sans chaîne');
+});
 console.log(n, 'tests OK');
