@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Albion Eco</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Mise en page : barre d'onglets, une colonne de travail ; teintes laiton (l'argent du jeu) sur ardoise */
+:root{
+  --bg:#f3f2ee; --surface:#fbfaf7; --line:#d9d5ca; --fg:#22252a; --muted:#6a6c6f;
+  --accent:#9a6b14; --accent-soft:#f1e5c8; --pos:#2f7a4a; --neg:#b03a2e; --warn:#8a5a00; --focus:#3b5ba5; --on-accent:#ffffff;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",sans-serif; --f-body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#16181b; --surface:#1e2125; --line:#33373d; --fg:#e7e4dc; --muted:#9a9a96;
+  --accent:#d6a848; --accent-soft:#3a3020; --pos:#6cc28a; --neg:#ec7a6c; --warn:#e2b04f; --focus:#8fa8e8; --on-accent:#1b1406; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#16181b; --surface:#1e2125; --line:#33373d; --fg:#e7e4dc; --muted:#9a9a96;
+  --accent:#d6a848; --accent-soft:#3a3020; --pos:#6cc28a; --neg:#ec7a6c; --warn:#e2b04f; --focus:#8fa8e8; --on-accent:#1b1406; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 var(--f-body)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+header.top{border-bottom:1px solid var(--line);background:var(--surface)}
+header.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:12px 24px;padding-block:14px}
+.brand{font:700 1.5rem/1 var(--f-display);letter-spacing:.02em}
+.brand span{color:var(--accent)}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+.tab{font:600 .95rem var(--f-display);letter-spacing:.04em;text-transform:uppercase;background:none;border:0;color:var(--muted);padding:8px 12px;border-radius:6px;cursor:pointer}
+.tab[aria-selected="true"]{color:var(--fg);background:var(--accent-soft)}
+.tab:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{padding-block:24px 64px}
+h2{font:700 1.6rem/1.2 var(--f-display);margin:0 0 4px;text-wrap:balance}
+h3{font:600 1.2rem/1.2 var(--f-display);margin:0 0 10px;letter-spacing:.02em}
+h4{font:600 1.05rem/1.25 var(--f-body);margin:0}
+.muted{color:var(--muted)} .small{font-size:.85rem}
+.lead{color:var(--muted);margin:0 0 20px;max-width:65ch}
+.runbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px}
+button{font:600 1rem var(--f-body);border-radius:8px;cursor:pointer}
+.primary{background:var(--accent);color:var(--on-accent);border:0;padding:12px 20px}
+.primary:disabled{opacity:.55;cursor:progress}
+.ghost{background:none;border:1px solid var(--line);color:var(--fg);padding:7px 12px}
+#status{min-height:1.5em;color:var(--muted)}
+#status[data-kind="ok"]{color:var(--pos)} #status[data-kind="err"]{color:var(--neg)} #status[data-kind="warn"]{color:var(--warn)}
+.warnbox{border:1px solid var(--warn);color:var(--warn);background:var(--accent-soft);padding:10px 12px;border-radius:8px;margin-bottom:16px;font-size:.95rem}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.kpi span{display:block;font:600 .8rem var(--f-display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kpi b{font:600 1.5rem var(--f-num);font-variant-numeric:tabular-nums}
+.kpi.main b{color:var(--accent)}
+.city{margin-bottom:28px}
+.line{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.line header{display:grid;grid-template-columns:auto 1fr auto;gap:4px 14px;align-items:baseline}
+.line .gain{text-align:right;font-family:var(--f-num)} .line .gain b{color:var(--pos);display:block;font-size:1.1rem}
+.line .gain span{font-size:.8rem}
+.kind{font:600 .75rem var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.tier{font:600 .85rem var(--f-num);color:var(--muted)}
+.chk{display:flex;align-items:center;gap:6px}
+.steps{margin:12px 0 10px;padding-left:22px;display:grid;gap:6px}
+.steps ul{margin:4px 0 0;padding-left:18px}
+.q{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-weight:600}
+.pill{display:inline-block;font:600 .75rem var(--f-body);padding:1px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);margin-left:6px}
+.pill.focus{border-color:var(--focus);color:var(--focus)}
+.line footer{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;border-top:1px solid var(--line);padding-top:10px;font-size:.9rem}
+.real{display:flex;align-items:center;gap:6px;margin-left:auto}
+input,select{font:1rem var(--f-body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+input[type=number]{font-family:var(--f-num);width:9em}
+.empty{border:1px dashed var(--line);border-radius:10px;padding:24px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:.9rem}
+.field>span{color:var(--muted)}
+.field input{width:100%}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:.92rem;cursor:pointer}
+details{border-top:1px solid var(--line);padding:8px 0}
+summary{cursor:pointer;font-weight:600}
+.specgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:10px 0}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font:600 .8rem var(--f-display);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+td.r,th.r{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.pos{color:var(--pos)} .neg{color:var(--neg)} .err{color:var(--neg)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px}
+.prose{max-width:70ch} .prose li{margin-bottom:6px}
+@media (max-width:560px){.line header{grid-template-columns:1fr}.line .gain{text-align:left}.real{margin-left:0}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="brand">Albion <span>Eco</span></div>
+  <nav aria-label="Sections">
+    <button class="tab" data-tab="today">Aujourd'hui</button>
+    <button class="tab" data-tab="islands">Îles</button>
+    <button class="tab" data-tab="log">Résultats</button>
+    <button class="tab" data-tab="profile">Profil</button>
+    <button class="tab" data-tab="about">Méthode</button>
+  </nav>
+</div></header>
+<main class="wrap">
+
+<section class="panel" id="p-today">
+  <h2>Ta liste du jour</h2>
+  <p class="lead">L'outil lit les prix du marché européen, calcule chaque recette dans tes villes avec ta spécialisation, et retient les lignes qui tiennent dans ton temps, ton capital et ton focus.</p>
+  <div id="fee-warn" class="warnbox" hidden></div>
+  <div class="runbar"><button class="primary" id="run">Analyser le marché</button><span id="status" role="status"></span></div>
+  <div class="kpis" id="kpis" hidden>
+    <div class="kpi main"><span>Profit prévu</span><b id="k-profit"></b></div>
+    <div class="kpi"><span>Capital engagé</span><b id="k-capital"></b></div>
+    <div class="kpi"><span>Focus utilisé</span><b id="k-focus"></b></div>
+    <div class="kpi"><span>Temps estimé</span><b id="k-time"></b></div>
+    <div class="kpi"><span>Prix lus le</span><b id="k-at" style="font-size:1rem"></b></div>
+  </div>
+  <div id="plan"></div>
+</section>
+
+<section class="panel" id="p-islands" hidden>
+  <h2>Travailleurs</h2>
+  <p class="lead">Compare, au prix du jour, la valeur du butin d'un carnet plein et le prix d'achat de ce carnet. Un gain positif veut dire : acheter le carnet plein et le donner à un travailleur rapporte plus que ce qu'il coûte.</p>
+  <div class="card row">
+    <label class="field"><span>Ville du marché</span><select id="lab-city"></select></label>
+    <label class="field"><span>Tier des carnets</span><select id="lab-tier"><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option></select></label>
+    <button class="ghost" id="lab-run">Calculer</button>
+  </div>
+  <div id="lab-out"></div>
+</section>
+
+<section class="panel" id="p-log" hidden>
+  <h2>Résultats réels</h2>
+  <p class="lead" id="log-sum"></p>
+  <div id="log"></div>
+  <p><button class="ghost" id="log-clear">Effacer le journal</button></p>
+</section>
+
+<section class="panel" id="p-profile" hidden>
+  <h2>Profil du personnage</h2>
+  <p class="lead">Un profil par personnage. Tout reste dans ce navigateur.</p>
+  <div class="card row">
+    <label class="field"><span>Personnage</span><select id="pf-select"></select></label>
+    <label class="field"><span>Nouveau personnage</span><input id="pf-newname" placeholder="nom"></label>
+    <button class="ghost" id="pf-new" type="button">Créer</button>
+  </div>
+  <form onsubmit="return false">
+  <div class="card"><h3>Ressources du jour</h3><div class="grid">
+    <label class="field"><span>Banque totale (argent)</span><input type="number" id="pf-bank" min="0"></label>
+    <label class="field"><span>Réserve intouchable</span><input type="number" id="pf-reserve" min="0"></label>
+    <label class="field"><span>Focus disponible</span><input type="number" id="pf-focus" min="0" max="30000"></label>
+    <label class="field"><span>Temps pour l'économie (minutes)</span><input type="number" id="pf-minutes" min="5"></label>
+    <label class="field"><span>Achat et vente</span><select id="pf-mode"><option value="instant">Directs (immédiat)</option><option value="orders">Par ordres (24 h, meilleures marges)</option></select></label>
+    <label class="chip" style="align-self:end"><input type="checkbox" id="pf-premium"> Premium actif</label>
+  </div></div>
+  <div class="card"><h3>Villes où tu acceptes d'agir</h3><div class="chips" id="pf-cities"></div></div>
+  <div class="card"><h3>Activités à considérer</h3><div class="chips" id="pf-families"></div></div>
+  <div class="card"><h3>Frais de station</h3><p class="muted small">Le prix affiché à la station, en argent par 100 de nutrition. Il change selon la station : relève celui que tu utilises.</p><div class="grid" id="pf-fees"></div></div>
+  <div class="card"><h3>Bonus de production du jour (%)</h3><p class="muted small">Affiché en jeu chaque jour. Il s'ajoute au retour de ressources. Laisse vide s'il n'y en a pas.</p><div class="grid" id="pf-daily"></div></div>
+  <div class="card"><h3>Réglages de prudence</h3><div class="grid">
+    <label class="field"><span>Âge maximal d'un prix (heures)</span><input type="number" id="pf-maxAge" min="1"></label>
+    <label class="field"><span>Part du volume quotidien (%)</span><input type="number" id="pf-liqShare" min="1" max="100"></label>
+    <label class="field"><span>Capital max par ligne (%)</span><input type="number" id="pf-maxShare" min="1" max="100"></label>
+    <label class="field"><span>Marge minimale (%)</span><input type="number" id="pf-minMargin" min="0"></label>
+    <label class="field"><span>Minutes par ligne (à mesurer)</span><input type="number" id="pf-minutesPerLine" min="1"></label>
+    <label class="field"><span>Profit minimal par ligne</span><input type="number" id="pf-minLineProfit" min="0"></label>
+  </div></div>
+  <div class="card"><h3>Spécialisation (Destiny Board)</h3>
+    <p class="muted small">Niveau de 0 à 100 de chaque nœud de craft et d'agriculture. Il réduit le coût en focus selon les bonus officiels du jeu.</p>
+    <input id="spec-search" placeholder="Chercher un nœud (ex. tissu, damné, soupe)" style="width:100%;margin-bottom:8px">
+    <div id="specs"></div></div>
+  </form>
+  <div class="card"><h3>Sauvegarde du profil</h3>
+    <p class="muted small">Exporte un code pour le garder ou le recharger sur un autre navigateur. Colle un code puis Importer pour le charger.</p>
+    <textarea id="pf-code" aria-label="Code du profil"></textarea>
+    <div class="row" style="margin-top:8px"><button class="ghost" id="pf-export" type="button">Exporter</button><button class="ghost" id="pf-import" type="button">Importer</button></div></div>
+</section>
+
+<section class="panel prose" id="p-about" hidden>
+  <h2>Méthode</h2>
+  <p id="data-version" class="muted"></p>
+  <ul>
+    <li><b>Recettes, focus, bonus de villes, Destiny Board</b> : lus dans les fichiers officiels du jeu, reconstruits chaque semaine.</li>
+    <li><b>Retour de ressources</b> : bonus ÷ (1 + bonus), avec 18 % en ville, +40 % raffinage ou +15 % craft dans la ville de spécialité, +59 % avec focus.</li>
+    <li><b>Focus</b> : coût de base × 0,5 puissance (efficacité ÷ 10 000).</li>
+    <li><b>Taxes</b> : 8 % de taxe de vente (4 % Premium) ; 2,5 % de frais pour chaque ordre posé.</li>
+    <li><b>Prix</b> : relevés partagés par les joueurs (Albion Online Data Project). Un prix plus vieux que l'âge maximal du profil est ignoré.</li>
+    <li><b>Quantités</b> : limitées à une part du volume vendu chaque jour dans la ville, pour ne pas saturer le marché.</li>
+    <li><b>Qualité</b> : le profit est calculé sur la qualité Normale. Les crafts de meilleure qualité sont un bonus.</li>
+    <li><b>Hypothèses à mesurer</b> : frais de station (valeur d'objet × 0,1125 × prix), rendement des travailleurs, minutes par ligne. Le journal des résultats remplace peu à peu ces hypothèses par tes chiffres réels.</li>
+  </ul>
+</section>
+</main>
+<script src="data.js"></script>
+<script src="engine.js"></script>
+<script src="market.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
