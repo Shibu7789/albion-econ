@@ -257,7 +257,9 @@
     try {
       const obj = JSON.parse(decodeURIComponent(escape(atob($('#pf-code').value.trim()))));
       const name = obj.name || profiles.active;
-      profiles.list[name] = Object.assign(JSON.parse(JSON.stringify(DEFAULT_PROFILE)), obj);
+      // un profil existant garde ce que le code ne contient pas (banque, focus, villes…) ; les spés du code s'ajoutent
+      const cur = profiles.list[name] || JSON.parse(JSON.stringify(DEFAULT_PROFILE));
+      profiles.list[name] = Object.assign(cur, obj, { specs: Object.assign({}, cur.specs, obj.specs || {}) });
       profiles.active = name; saveProfiles(); renderProfile(); feeWarning();
       setStatus(`Profil « ${name} » importé.`, 'ok');
     } catch (e) { setStatus('Code de profil illisible : recopie-le en entier.', 'err'); }
