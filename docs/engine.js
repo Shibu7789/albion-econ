@@ -80,14 +80,24 @@
     /* ---------- Villes d'achat et de vente ---------- */
     // multiCity : acheter chaque ingrédient dans la ville la moins chère et vendre dans la meilleure,
     // en payant le transport (Travel Planner) au taux du profil sur la marchandise déplacée.
-    function buyCities(craftCity, prof) { return prof.multiCity ? prof.cities : [craftCity]; }
+    // Le Travel Planner ne relie que les 5 villes royales : Caerleon et Brecilien se rejoignent à pied (zones risquées).
+    // Hors sortie hebdomadaire, une marchandise ne voyage donc qu'entre villes royales.
+    const ROYAL = new Set(['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling']);
+    function linked(a, b, prof) {
+      if (a === b) return true;
+      if (b === 'Black Market') return a === 'Caerleon' || prof.blackMarket === 'only';
+      return ROYAL.has(a) && ROYAL.has(b);
+    }
+    function buyCities(craftCity, prof) { return prof.multiCity ? prof.cities.filter(c => linked(c, craftCity, prof)) : [craftCity]; }
     // prof.blackMarket : true (par défaut), false (exclu), 'only' (sortie Black Market de la semaine)
     function withBM(list, prof) {
       const bmOk = prof.blackMarket !== false && ((prof.cities || CITIES).includes('Caerleon') || list.includes('Caerleon'));
       if (prof.blackMarket === 'only') return bmOk ? ['Black Market'] : [];
       return bmOk ? list.concat('Black Market') : list;
     }
-    function sellVenues(craftCity, prof) { return withBM(prof.multiCity ? prof.cities.slice() : [craftCity], prof); }
+    function sellVenues(craftCity, prof) {
+      return withBM(prof.multiCity ? prof.cities.slice() : [craftCity], prof).filter(v => linked(craftCity, v, prof));
+    }
     const travelOf = (where, craftCity, prof) => (where === craftCity || (where === 'Black Market' && craftCity === 'Caerleon')) ? 0 : (prof.travelPct || 0);
     function bestBuy(prices, id, craftCity, prof) {
       let best = null;
@@ -354,7 +364,7 @@
           const buy = acquire(prices, item.id, city, prof);
           if (buy == null) continue;
           let best = null;
-          for (const v of withBM(cities.filter(c => c !== city), prof)) {
+          for (const v of withBM(cities.filter(c => c !== city), prof).filter(v => linked(city, v, prof))) {
             const n = dispose(prices, item.id, v, Object.assign({}, prof));
             if (n == null) continue;
             const net = n * (1 - travelOf(v, city, prof));
@@ -447,7 +457,7 @@
         }
         // vente
         let best = null;
-        const venues = o.flip ? withBM(prof.cities.filter(v => v !== o.city), prof) : sellVenues(o.city, prof);
+        const venues = o.flip ? withBM(prof.cities.filter(v => v !== o.city), prof).filter(v => linked(o.city, v, prof)) : sellVenues(o.city, prof);
         for (const v of venues) {
           const h = H(o.id, v);
           if (!h || !(h.n > 0) || !(h.p > 0)) continue;

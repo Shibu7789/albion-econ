@@ -243,4 +243,15 @@ t('îles : valeur d\'une parcelle de choux (graines, retour, vente brute)', () =
   near(r.grow, 9 * 11580 * (1 - 0.8) / (9 * 4.5), 1e-6, 'coût par chou');
   near(r.perPlotDayNet, 9 * 4.5 * (250 * 0.92 - r.grow), 1e-6, 'gain par parcelle');
 });
+t('transport : jamais entre une ville royale et Caerleon ou Brecilien (hors sortie hebdomadaire)', () => {
+  const pr = { T5_CLOTH: { Lymhurst: P(500, 450), Caerleon: P(5000, 4000), Brecilien: P(5000, 4000), Martlock: P(700, 650) } };
+  const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Caerleon', 'Brecilien', 'Martlock'], multiCity: true, travelPct: 0, blackMarket: false });
+  const f = E.flips(pr, pm, it => it.id === 'T5_CLOTH');
+  const fromLym = f.find(x => x.city === 'Lymhurst');
+  assert.strictEqual(fromLym.sellVenue, 'Martlock', 'reste entre villes royales');
+  assert.ok(!f.some(x => x.city === 'Caerleon' || x.city === 'Brecilien'), 'rien ne part de Caerleon/Brecilien');
+  const o = E.evaluate({ T5_FIBER: { Lymhurst: P(100, 90), Caerleon: P(10, 9) }, T4_CLOTH: { Lymhurst: P(200, 180) },
+    T5_CLOTH: { Lymhurst: P(650, 600), Caerleon: P(9000, 8000) } }, i5, rec, 1, 'Lymhurst', false, pm);
+  assert.strictEqual(o.sellVenue, 'Lymhurst'); assert.ok(o.ingredients.every(g => g.city === 'Lymhurst'));
+});
 console.log(n, 'tests OK');
