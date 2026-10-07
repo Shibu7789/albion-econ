@@ -31,7 +31,7 @@ function fakeHistory(url) {
   const locs = u.searchParams.get('locations').split(',');
   const out = [];
   for (const id of ids) for (const location of locs)
-    out.push({ item_id: id, location, quality: 1, data: Array.from({ length: 7 }, (_, k) => ({ item_count: 2000, avg_price: 1, timestamp: '' })) });
+    out.push({ item_id: id, location, quality: 1, data: Array.from({ length: 7 }, (_, k) => ({ item_count: 2000, avg_price: (value.get(id) || 1) * 11, timestamp: '' })) });
   return out;
 }
 

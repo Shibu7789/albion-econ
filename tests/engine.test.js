@@ -149,4 +149,12 @@ t('planificateur : le focus va à la meilleure rentabilité par point', () => {
   const b = pl.lines.find(l => l.id === 'B'); const a = pl.lines.find(l => l.id === 'A');
   assert.ok(b.useFocus, 'B au focus'); assert.ok(!a.useFocus, 'A sans focus (focus épuisé par B)');
 });
+t('garde-fou : prix de vente aberrant ramené au prix moyen des 7 jours', () => {
+  const o = E.evaluate(prices, i5, rec, 1, 'Lymhurst', false, prof);       // vente à 600
+  const kept = E.applyHistory([o], { T5_CLOTH: { Lymhurst: { n: 100, p: 400 } } }, prof);
+  assert.strictEqual(kept.length, 1); near(kept[0].unitSell, 400 * 0.92, 1e-9, 'plafonné'); assert.ok(kept[0].capped);
+  const gone = E.applyHistory([o], { T5_CLOTH: { Lymhurst: { n: 100, p: 300 } } }, prof);
+  assert.strictEqual(gone.length, 0, 'plus rentable une fois plafonné');
+  assert.strictEqual(E.applyHistory([o], {}, prof).length, 0, 'sans historique : écarté');
+});
 console.log(n, 'tests OK');

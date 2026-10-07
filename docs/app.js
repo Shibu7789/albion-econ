@@ -106,7 +106,8 @@
       top.forEach(o => { vNeed.add(o.id); o.ingredients.forEach(l => vNeed.add(l.id)); });
       setStatus(`Lecture des volumes de vente : ${vNeed.size} objets…`);
       const volumes = await M.fetchVolumes([...vNeed], locs, { onProgress: (d, t) => setStatus(`Lecture des volumes… ${d}/${t}`) });
-      lastPlan = E.plan(top, volumes, p);
+      const checked = E.applyHistory(top, volumes, p).sort((a, b) => b.profit - a.profit);
+      lastPlan = E.plan(checked, volumes, p);
       lastPlan.at = new Date().toISOString();
       lastPlan.considered = opps.length;
       store.set('ae.lastPlan.' + profiles.active, lastPlan);
@@ -152,7 +153,7 @@
         ${l.kind === 3 ? `<li><b>Améliorer</b> ${fmt(l.n)} fois à la station de la pièce</li>`
           : `<li><b>${l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter'}</b> ${fmt(l.n)} fois${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}
           ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
-        <li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>
+        <li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>
       </ol>
       <footer><span class="muted">Investissement ${fmtK(l.totalCost)}</span>
         <label class="real">Encaissé réel <input type="number" inputmode="numeric" id="real-${i}" placeholder="argent reçu"></label>

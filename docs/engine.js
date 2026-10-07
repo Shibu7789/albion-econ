@@ -199,10 +199,28 @@
       return out;
     }
 
+    /* ---------- Garde-fou : prix de vente plafonné au prix moyen payé sur 7 jours ---------- */
+    // Un ordre de vente isolé très au-dessus du marché (ou un vieux relevé) ne doit pas créer une fausse opportunité.
+    const volN = v => v == null ? 0 : (typeof v === 'object' ? v.n : v);
+    function applyHistory(opps, volumes, prof) {
+      const out = [];
+      for (const o of opps) {
+        const h = volumes[o.id] && volumes[o.id][o.sellVenue];
+        if (!h || typeof h !== 'object' || !(h.p > 0)) { if (h != null && typeof h !== 'object') out.push(o); continue; }
+        const fees = salesTax(prof) + (prof.mode === 'orders' ? C.setupFee : 0);
+        const cap = h.p * (1 - fees) * (1 - travelOf(o.sellVenue, o.city, prof));
+        if (o.unitSell <= cap) { out.push(o); continue; }
+        const revenue = cap * o.amount, profit = revenue - o.cost;
+        if (profit > 0 && profit / o.cost >= prof.minMargin)
+          out.push(Object.assign({}, o, { unitSell: cap, revenue, profit, margin: profit / o.cost, capped: true }));
+      }
+      return out;
+    }
+
     /* ---------- Liquidité : nombre maximal de crafts ---------- */
     // volumes : { [id]: { [city]: ventes moyennes par jour } }
     function maxCrafts(o, volumes, prof) {
-      const vol = (id, c) => (volumes[id] && volumes[id][c]) || 0;
+      const vol = (id, c) => volN(volumes[id] && volumes[id][c]);
       let n = Math.floor(vol(o.id, o.sellVenue) * prof.liqShare / o.amount);
       for (const l of o.ingredients) {
         if (l.effQty <= 0) continue;
@@ -243,7 +261,7 @@
         for (const l of o.ingredients) {
           if (l.effQty <= 0) continue;
           const bc = l.city || o.city, k = l.id + '|' + bc;
-          if (!(k in left)) left[k] = ((volumes[l.id] && volumes[l.id][bc]) || 0) * prof.liqShare;
+          if (!(k in left)) left[k] = volN(volumes[l.id] && volumes[l.id][bc]) * prof.liqShare;
           n = Math.min(n, Math.floor(left[k] / l.effQty));
         }
         n = Math.min(n, Math.floor(Math.min(capital, capCap) / o.cost));
@@ -280,7 +298,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, applyHistory, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

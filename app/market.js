@@ -67,7 +67,7 @@
     return out;
   }
 
-  // -> { [id]: { [city]: ventes moyennes par jour sur les 7 derniers jours } }
+  // -> { [id]: { [city]: { n: ventes moyennes par jour, p: prix moyen payé } } }  (7 derniers jours)
   async function fetchVolumes(ids, cities, opts = {}) {
     const f = opts.fetch || root.fetch.bind(root);
     const loc = encodeURIComponent(cities.join(','));
@@ -79,8 +79,10 @@
     for (const arr of results) for (const r of arr) {
       const d = (r.data || []).slice(-7);
       if (!d.length) continue;
-      const avg = d.reduce((s, x) => s + (x.item_count || 0), 0) / 7;
-      (out[r.item_id] = out[r.item_id] || {})[r.location] = avg;
+      const cnt = d.reduce((s, x) => s + (x.item_count || 0), 0);
+      const val = d.reduce((s, x) => s + (x.item_count || 0) * (x.avg_price || 0), 0);
+      // n = ventes moyennes par jour ; p = prix moyen réellement payé sur 7 jours
+      (out[r.item_id] = out[r.item_id] || {})[r.location] = { n: cnt / 7, p: cnt ? val / cnt : 0 };
     }
     return out;
   }
