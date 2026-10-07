@@ -119,15 +119,15 @@
       return MEMO;
     }
     let MEMO_PROF = null;
-    function unitCost(prices, ii, city, prof, depth) {
+    function unitCost(prices, ii, city, prof, depth, withFocus) {
       const b = bestBuy(prices, items[ii].id, city, prof);
-      const m = prof.chains === false ? null : makeCost(prices, ii, city, prof, depth);
+      const m = prof.chains === false ? null : makeCost(prices, ii, city, prof, depth, withFocus);
       if (m && (!b || m.cost < b.price)) return m;
       return b ? { cost: b.price, buy: b } : null;
     }
-    function makeCost(prices, idx, city, prof, depth) {
+    function makeCost(prices, idx, city, prof, depth, withFocus) {
       if (depth > 3) return null;
-      const M = memo(prices, prof), key = idx + '|' + city + '|' + depth;
+      const M = memo(prices, prof), key = idx + '|' + city + '|' + depth + '|' + (withFocus ? 1 : 0);
       if (M.has(key)) return M.get(key);
       M.set(key, null);                                   // garde-fou contre les boucles
       const item = items[idx];
@@ -135,15 +135,18 @@
       for (const rec of item.r || []) {
         const kind = rec[3];
         // raffinage, transmutation et craft d'ingrédients (extraits, sauces, alcool, pain, beurre, viande…)
-        const [silver, , amount, , ings] = rec;
-        const R = rrr(productionBonus(item, kind, city, false, prof.dailyBonus && prof.dailyBonus[city]));
-        let cost = silver || 0; const leaves = [], steps = [];
+        const [silver, focusBase, amount, , ings] = rec;
+        const f = withFocus && focusBase > 0;
+        const R = rrr(productionBonus(item, kind, city, f, prof.dailyBonus && prof.dailyBonus[city]));
+        let cost = silver || 0, focus = f ? focusCost(focusBase, fce(idx, prof.specs, 'f')) : 0;
+        const leaves = [], steps = [];
         let ok = true;
         for (const [ii, qty, noret] of ings) {
           const eff = noret ? qty : qty * (1 - R);
-          const u = unitCost(prices, ii, city, prof, depth + 1);
+          const u = unitCost(prices, ii, city, prof, depth + 1, withFocus);
           if (!u) { ok = false; break; }
           cost += eff * u.cost;
+          focus += eff * (u.focus || 0);
           if (u.buy) leaves.push({ id: items[ii].id, name: items[ii].n, price: u.buy.raw, city: u.buy.city, effQty: eff });
           else {
             u.leaves.forEach(l => leaves.push(Object.assign({}, l, { effQty: l.effQty * eff })));
@@ -154,10 +157,10 @@
         cost += stationFee(item, amount, city, prof);
         const per = cost / amount;
         if (!best || per < best.cost) {
-          best = { cost: per,
+          best = { cost: per, focus: focus / amount,
             leaves: leaves.map(l => Object.assign({}, l, { effQty: l.effQty / amount })),
             steps: steps.map(st => Object.assign({}, st, { qty: st.qty / amount }))
-              .concat([{ id: item.id, name: item.n, tier: item.t, ench: item.e, kind, kindLabel: KIND_LABEL[kind], qty: 1 }]) };
+              .concat([{ id: item.id, name: item.n, tier: item.t, ench: item.e, kind, kindLabel: KIND_LABEL[kind], qty: 1, focus: f }]) };
         }
       }
       M.set(key, best);
@@ -194,12 +197,14 @@
       let cost = silver || 0;
       const lines = [];
       const chain = [];
+      let chainFocus = 0;
       for (const [ii, qty, noret] of ings) {
         const ing = items[ii];
         const eff = noret ? qty : qty * (1 - R);
-        const u = unitCost(prices, ii, city, prof, 1);
+        const u = unitCost(prices, ii, city, prof, 1, useFocus === 'all');
         if (!u) return null;
         cost += eff * u.cost;
+        chainFocus += eff * (u.focus || 0);
         if (u.buy) lines.push({ id: ing.id, name: ing.n, qty, price: u.buy.raw, city: u.buy.city, effQty: eff });
         else {
           u.leaves.forEach(l => lines.push(Object.assign({}, l, { qty: l.effQty * eff, effQty: l.effQty * eff })));
@@ -211,7 +216,8 @@
       if (!best) return null;
       const revenue = best.net * amount;
       const fpts = useFocus ? fce(itemIdx, prof.specs, 'f') : 0;
-      const focus = useFocus ? focusCost(focusBase, fpts) : 0;
+      const focus = (useFocus ? focusCost(focusBase, fpts) : 0) + chainFocus;
+      if (useFocus === 'all' && !(chainFocus > 0)) return null;    // rien à focaliser en amont : doublon de « final »
       return {
         itemIdx, id: item.id, name: item.n, tier: item.t, ench: item.e, kind, kindLabel: KIND_LABEL[kind],
         city, sellVenue: best.venue, useFocus, amount, rrr: R, cost, revenue, profit: revenue - cost,
@@ -256,7 +262,7 @@
           if (item.r) {
             for (const rec of item.r) {
               const kind = rec[3];
-              for (const f of kind === 2 ? [false] : [false, true]) {
+              for (const f of kind === 2 ? [false] : [false, true, 'all']) {
                 const o = evaluate(prices, idx, rec, kind, city, f, prof);
                 // une variante au focus inaccessible avec le focus du jour est inutile
                 if (o && f && !(o.focus <= (prof.focus || 0))) continue;

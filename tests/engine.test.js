@@ -222,4 +222,16 @@ t('chaîne : le tissu T4 produit soi-même s\'il revient moins cher que son prix
   const sans = E.evaluate(pr, i5, rec, 1, 'Lymhurst', false, Object.assign({}, prof, { chains: false }));
   near(sans.cost, (3 * 100 + 500) * (1 - R), 1e-6, 'sans chaîne');
 });
+t('chaîne au focus : focus aussi sur l\'étape intermédiaire, coût plus bas, focus additionné', () => {
+  const pr = { T5_FIBER: { Lymhurst: P(100, 90) }, T4_FIBER: { Lymhurst: P(20, 18) }, T3_CLOTH: { Lymhurst: P(30, 25) },
+    T4_CLOTH: { Lymhurst: P(500, 450) }, T5_CLOTH: { Lymhurst: P(900, 850) } };
+  const fin = E.evaluate(pr, i5, rec, 1, 'Lymhurst', true, prof);
+  const all = E.evaluate(pr, i5, rec, 1, 'Lymhurst', 'all', prof);
+  const Rf = 1.17 / 2.17, R = 0.58 / 1.58;
+  near(fin.cost, (3 * 100 + (2 * 20 + 30) * (1 - R)) * (1 - Rf), 1e-6, 'focus final seulement');
+  near(all.cost, (3 * 100 + (2 * 20 + 30) * (1 - Rf)) * (1 - Rf), 1e-6, 'focus sur toute la chaîne');
+  const ix4 = E.index.get('T4_CLOTH');
+  const f4 = E.focusCost(DATA.items[ix4].r[0][1], E.fce(ix4, specs, 'f'));
+  near(all.focus, fin.focus + (1 - Rf) * f4, 1e-6, 'focus additionné');
+});
 console.log(n, 'tests OK');
