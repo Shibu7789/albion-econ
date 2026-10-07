@@ -130,6 +130,7 @@
       const checked = E.applyHistory(top, volumes, prices, p).sort((a, b) => b.profit - a.profit);
       lastPlan = E.plan(checked, volumes, p);
       lastPlan.diag = { found: opps.length, checked: checked.length };
+      lastPlan.capitalAvail = p.capital;
       lastPlan.at = new Date().toISOString();
       lastPlan.considered = opps.length;
       store.set('ae.lastPlan.' + profiles.active, lastPlan);
@@ -151,6 +152,7 @@
     $('#kpis').hidden = false;
     $('#k-profit').textContent = fmtK(pl.totalProfit);
     $('#k-capital').textContent = fmtK(pl.capitalUsed);
+    $('#k-capital-of').textContent = 'sur ' + fmtK(pl.capitalAvail) + ' disponibles';
     $('#k-focus').textContent = fmt(pl.focusUsed);
     $('#k-time').textContent = fmt(pl.minutesUsed) + ' min';
     $('#k-at').textContent = new Date(pl.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
@@ -164,7 +166,8 @@
 
   function lineHTML(l, i, p) {
     const buyVerb = p.mode === 'orders' ? 'Poser un ordre d\'achat' : 'Acheter';
-    const sellVerb = p.mode === 'orders' ? 'Poser un ordre de vente' : 'Vendre directement';
+    const bm = l.sellVenue === 'Black Market';
+    const sellVerb = p.mode === 'orders' && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
     const ench = l.ench ? '.' + l.ench : '';
     const ings = l.ingredients.map(g => `<li><span class="q">${fmt(Math.ceil(g.effQty * l.n))}</span> ${esc(g.name)} <span class="muted">à ${fmt(g.price)} max${g.city && g.city !== l.city ? ' · <b>' + esc(g.city) + '</b>' : ''}</span></li>`).join('');
     return `<article class="line" data-i="${i}">
@@ -177,7 +180,7 @@
           : l.kind === 3 ? `<li><b>Améliorer</b> ${fmt(l.n)} fois à la station de la pièce</li>`
           : `<li><b>${l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter'}</b> ${fmt(l.n)} fois${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}
           ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
-        <li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>
+        <li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)) / (1 - (l.sellVenue !== l.city && !(bm && l.city === 'Caerleon') ? (p.travelPct || 0) : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>
       </ol>
       <footer><span class="muted">Investissement ${fmtK(l.totalCost)}</span>
         <label class="real">Encaissé réel <input type="number" inputmode="numeric" id="real-${i}" placeholder="argent reçu"></label>

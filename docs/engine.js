@@ -68,7 +68,8 @@
     // Argent net reçu pour 1 unité vendue
     function dispose(prices, id, city, prof) {
       const tax = salesTax(prof);
-      if (prof.mode === 'orders') {
+      // le Black Market n'accepte pas d'ordres de vente : on lui vend toujours directement
+      if (prof.mode === 'orders' && city !== 'Black Market') {
         const s = priceOf(prices, id, city, 'sell', prof.maxAge);
         return s == null ? null : s * (1 - tax - C.setupFee);
       }
@@ -251,8 +252,9 @@
           const cur = dispose(prices, o.id, v, prof);
           if (cur == null) continue;
           const t = 1 - travelOf(v, o.city, prof);
-          const net = Math.min(cur, h.p * (1 - fees)) * t;
-          if (!best || net > best.net) best = { venue: v, net, capped: cur > h.p * (1 - fees) };
+          const f = v === 'Black Market' ? salesTax(prof) : fees;
+          const net = Math.min(cur, h.p * (1 - f)) * t;
+          if (!best || net > best.net) best = { venue: v, net, capped: cur > h.p * (1 - f) };
         }
         if (!best) continue;
         // achat

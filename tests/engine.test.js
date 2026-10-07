@@ -180,4 +180,8 @@ t('revente : achat dans une ville, vente directe dans une autre, transport compt
   const [c] = E.applyHistory([o], vol, pr, pm);
   assert.strictEqual(c.sellVenue, 'Martlock'); assert.strictEqual(c.ingredients[0].city, 'Lymhurst');
 });
+t('Black Market : toujours vente directe, sans frais d\'ordre', () => {
+  const pr = { X: { 'Black Market': P(0, 1000) } };
+  near(E.dispose(pr, 'X', 'Black Market', Object.assign({}, prof, { mode: 'orders' })), 920, 1e-9, 'vente directe');
+});
 console.log(n, 'tests OK');
