@@ -32,11 +32,24 @@
   ];
   function familyOf(it) { const f = FAMILIES.find(f => f.key !== 'up' && f.key !== 'raff' && f.key !== 'trans' && f.test(it)); return f ? f.key : 'other'; }
 
+  /* Catégories de production (clés officielles des bonus de ville) */
+  const CAT_LABEL = { fiber: 'Raffinage : tissu', ore: 'Raffinage : barres', hide: 'Raffinage : cuir', wood: 'Raffinage : planches',
+    rock: 'Raffinage : blocs de pierre', sword: 'Épées', axe: 'Haches', mace: 'Masses', hammer: 'Marteaux', crossbow: 'Arbalètes',
+    knuckles: 'Gants de guerre', bow: 'Arcs', spear: 'Lances', naturestaff: 'Bâtons de nature', dagger: 'Dagues',
+    quarterstaff: 'Bâtons de combat', shapeshifterstaff: 'Bâtons de métamorphose', firestaff: 'Bâtons de feu',
+    froststaff: 'Bâtons de givre', arcanestaff: 'Bâtons arcaniques', cursestaff: 'Bâtons damnés', holystaff: 'Bâtons sacrés',
+    plate_helmet: 'Casques de plaques', plate_armor: 'Armures de plaques', plate_shoes: 'Bottes de plaques',
+    leather_helmet: 'Capuches de cuir', leather_armor: 'Vestes de cuir', leather_shoes: 'Chaussures de cuir',
+    cloth_helmet: 'Capuchons de tissu', cloth_armor: 'Robes de tissu', cloth_shoes: 'Sandales de tissu', offhand: 'Mains gauches',
+    bag: 'Sacs', cape: 'Capes', tools: 'Outils', gatherergear: 'Équipement de récolte', potion: 'Potions', food: 'Nourriture',
+    meat_pig: 'Boucher : porc', meat_goose: 'Boucher : oie', meat_goat: 'Boucher : chèvre', meat_cow: 'Boucher : vache',
+    meat_chicken: 'Boucher : poulet', meat_sheep: 'Boucher : mouton' };
+
   /* ---------- Profils ---------- */
   const DEFAULT_PROFILE = {
     name: 'Principal', premium: false, focus: 0, bank: 0, reserve: 10000000,
-    cities: ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon'],
-    mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans'],
+    cities: ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'],
+    multiCity: true, travelPct: 0.05, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans'],
     maxAge: 12, liqShare: 0.15, maxShare: 0.25, minMargin: 0.05, minutes: 45, minutesPerLine: 5,
     minLineProfit: 10000, stationFee: {}, dailyBonus: {}, specs: {},
   };
@@ -121,7 +134,7 @@
     pl.lines.forEach((l, i) => { (byCity[l.city] = byCity[l.city] || []).push([l, i]); });
     const p = prof();
     box.innerHTML = Object.entries(byCity).map(([city, ls]) => `
-      <section class="city"><h3>${esc(city)} <span class="muted">${ls.length} ligne${ls.length > 1 ? 's' : ''}</span></h3>
+      <section class="city"><h3>Crafter à ${esc(city)} <span class="muted">${ls.length} ligne${ls.length > 1 ? 's' : ''}</span></h3>
       ${ls.map(([l, i]) => lineHTML(l, i, p)).join('')}</section>`).join('');
   }
 
@@ -129,7 +142,7 @@
     const buyVerb = p.mode === 'orders' ? 'Poser un ordre d\'achat' : 'Acheter';
     const sellVerb = p.mode === 'orders' ? 'Poser un ordre de vente' : 'Vendre directement';
     const ench = l.ench ? '.' + l.ench : '';
-    const ings = l.ingredients.map(g => `<li><span class="q">${fmt(Math.ceil(g.effQty * l.n))}</span> ${esc(g.name)} <span class="muted">à ${fmt(g.price)} max</span></li>`).join('');
+    const ings = l.ingredients.map(g => `<li><span class="q">${fmt(Math.ceil(g.effQty * l.n))}</span> ${esc(g.name)} <span class="muted">à ${fmt(g.price)} max${g.city && g.city !== l.city ? ' · <b>' + esc(g.city) + '</b>' : ''}</span></li>`).join('');
     return `<article class="line" data-i="${i}">
       <header><label class="chk"><input type="checkbox" id="done-${i}"> <span class="kind">${esc(l.kindLabel)}</span></label>
         <h4>${esc(l.name)} <span class="tier">T${l.tier}${ench}</span></h4>
@@ -139,7 +152,7 @@
         ${l.kind === 3 ? `<li><b>Améliorer</b> ${fmt(l.n)} fois à la station de la pièce</li>`
           : `<li><b>${l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter'}</b> ${fmt(l.n)} fois${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}
           ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
-        <li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market' : ''}</span>${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>
+        <li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>
       </ol>
       <footer><span class="muted">Investissement ${fmtK(l.totalCost)}</span>
         <label class="real">Encaissé réel <input type="number" inputmode="numeric" id="real-${i}" placeholder="argent reçu"></label>
@@ -184,10 +197,13 @@
     $('#pf-premium').checked = !!p.premium;
     $('#pf-focus').value = p.focus; $('#pf-bank').value = p.bank; $('#pf-reserve').value = p.reserve;
     $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes;
+    $('#pf-multi').checked = !!p.multiCity; $('#pf-travel').value = Math.round((p.travelPct || 0) * 1000) / 10;
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
-    $('#pf-fees').innerHTML = E.CITIES.map(c => `<label class="field"><span>${c}</span><input type="number" data-fee="${c}" value="${p.stationFee[c] ?? ''}" placeholder="non saisi"></label>`).join('');
-    $('#pf-daily').innerHTML = E.CITIES.map(c => `<label class="field"><span>${c}</span><input type="number" step="1" data-daily="${c}" value="${p.dailyBonus[c] ? Math.round(p.dailyBonus[c] * 100) : ''}" placeholder="0"></label>`).join('');
+    $('#pf-fees').innerHTML = E.CITIES.map(c => `<label class="field"><span>${c}</span><input type="number" data-fee="${c}" value="${p.stationFee[c] ?? ''}" placeholder="1000"></label>`).join('');
+    const catOpts = sel => '<option value="">Catégorie…</option>' + Object.entries(CAT_LABEL).map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`).join('');
+    $('#pf-daily').innerHTML = E.CITIES.map(c => { const d = p.dailyBonus[c] || {};
+      return `<div class="field"><span>${c}</span><div class="row"><input type="number" step="1" data-daily="${c}" value="${d.pct ? Math.round(d.pct * 100) : ''}" placeholder="%" style="width:5em"><select data-dailycat="${c}" style="flex:1">${catOpts(d.cat)}</select></div></div>`; }).join('');
     ['maxAge', 'liqShare', 'maxShare', 'minMargin', 'minutesPerLine', 'minLineProfit'].forEach(k => {
       const el = $('#pf-' + k); const pct = ['liqShare', 'maxShare', 'minMargin'].includes(k);
       el.value = pct ? Math.round(p[k] * 100) : p[k];
@@ -197,10 +213,12 @@
   function readProfileForm() {
     updateProf({
       premium: $('#pf-premium').checked, focus: +$('#pf-focus').value || 0, bank: +$('#pf-bank').value || 0,
-      reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value, minutes: +$('#pf-minutes').value || 45,
+      reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value,
+      multiCity: $('#pf-multi').checked, travelPct: (+$('#pf-travel').value || 0) / 100, minutes: +$('#pf-minutes').value || 45,
       cities: $$('#pf-cities input:checked').map(i => i.value), families: $$('#pf-families input:checked').map(i => i.value),
       stationFee: Object.fromEntries($$('[data-fee]').filter(i => i.value !== '').map(i => [i.dataset.fee, +i.value])),
-      dailyBonus: Object.fromEntries($$('[data-daily]').filter(i => i.value !== '').map(i => [i.dataset.daily, +i.value / 100])),
+      dailyBonus: Object.fromEntries($$('[data-daily]').filter(i => i.value !== '' && +i.value > 0)
+        .map(i => [i.dataset.daily, { pct: +i.value / 100, cat: $(`[data-dailycat="${i.dataset.daily}"]`).value || null }])),
       maxAge: +$('#pf-maxAge').value || 12, liqShare: (+$('#pf-liqShare').value || 15) / 100,
       maxShare: (+$('#pf-maxShare').value || 25) / 100, minMargin: (+$('#pf-minMargin').value || 0) / 100,
       minutesPerLine: +$('#pf-minutesPerLine').value || 5, minLineProfit: +$('#pf-minLineProfit').value || 0,
@@ -226,7 +244,7 @@
   function feeWarning() {
     const p = prof(); const miss = p.cities.filter(c => !(c in p.stationFee));
     $('#fee-warn').hidden = !miss.length;
-    $('#fee-warn').textContent = miss.length ? `Frais de station non saisis pour ${miss.join(', ')} : les profits affichés n'en tiennent pas compte. Relève le prix affiché à la station (argent par 100 de nutrition) dans le profil.` : '';
+    $('#fee-warn').hidden = true;
   }
 
   /* Import / export d'un profil (code à coller) */

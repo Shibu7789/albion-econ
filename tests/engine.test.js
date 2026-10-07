@@ -13,7 +13,7 @@ const specs = {
   CRAFT_REFINE_FIBER_T7: 100, CRAFT_REFINE_FIBER_T8: 70,
 };
 const prof = { mode: 'instant', premium: false, maxAge: 24, specs, minMargin: 0, cities: ['Lymhurst'],
-  stationFee: {}, dailyBonus: {}, liqShare: 0.2, capital: 1e7, maxShare: 0.5, focus: 10000, minutes: 45,
+  stationFee: { Lymhurst: 0, Martlock: 0, Caerleon: 0 }, dailyBonus: {}, liqShare: 0.2, capital: 1e7, maxShare: 0.5, focus: 10000, minutes: 45,
   minutesPerLine: 5, minLineProfit: 0 };
 const P = (sell, buy) => ({ sell, sellAge: 1, buy, buyAge: 1 });
 const prices = {
@@ -115,5 +115,29 @@ t('planificateur : volume d\'un ingrédient partagé entre lignes', () => {
   const used = {};
   pl.lines.forEach(l => l.ingredients.forEach(g => { used[g.id] = (used[g.id] || 0) + g.effQty * l.n; }));
   Object.entries(used).forEach(([id, q]) => assert.ok(q <= 100 * 0.2 + 1e-9, `${id} ${q} > 20`));
+});
+t('frais de station : plafond officiel 1000 si non saisi', () => {
+  assert.strictEqual(DATA.consts.maxStationFee, 1000);
+  const o0 = E.evaluate(prices, i5, rec, 1, 'Lymhurst', false, prof);
+  const o1 = E.evaluate(prices, i5, rec, 1, 'Lymhurst', false, Object.assign({}, prof, { stationFee: {} }));
+  near(o1.cost - o0.cost, DATA.items[i5].v * 1 * 0.1125 * 1000 / 100, 1e-6, 'frais');
+});
+t('multi-villes : ingrédient acheté ailleurs avec transport, vente dans la meilleure ville', () => {
+  const pr = { T5_FIBER: { Lymhurst: P(100, 90), Martlock: P(50, 45) }, T4_CLOTH: { Lymhurst: P(200, 180) },
+    T5_CLOTH: { Lymhurst: P(650, 600), Martlock: P(900, 800) } };
+  const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Martlock'], multiCity: true, travelPct: 0.1 });
+  const o = E.evaluate(pr, i5, rec, 1, 'Lymhurst', false, pm);
+  const fib = o.ingredients.find(g => g.id === 'T5_FIBER');
+  assert.strictEqual(fib.city, 'Martlock');
+  near(o.cost, (3 * 50 * 1.1 + 200) / 1.58, 1e-6, 'coût avec transport');
+  assert.strictEqual(o.sellVenue, 'Martlock');
+  near(o.revenue, 800 * 0.92 * 0.9, 1e-6, 'revenu avec transport');
+  const single = E.evaluate(pr, i5, rec, 1, 'Lymhurst', false, Object.assign({}, pm, { multiCity: false }));
+  assert.strictEqual(single.ingredients.find(g => g.id === 'T5_FIBER').city, 'Lymhurst');
+});
+t('bonus du jour : seulement sur sa catégorie', () => {
+  const it = DATA.items[i5];
+  near(E.productionBonus(it, 1, 'Lymhurst', false, { pct: 0.1, cat: 'fiber' }), 0.68, 1e-9, 'tissu bonifié');
+  near(E.productionBonus(it, 1, 'Lymhurst', false, { pct: 0.1, cat: 'ore' }), 0.58, 1e-9, 'autre catégorie');
 });
 console.log(n, 'tests OK');

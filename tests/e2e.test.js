@@ -55,7 +55,7 @@ function fakeHistory(url) {
   await page.click('[data-tab="profile"]');
   await page.fill('#pf-bank', '60000000'); await page.dispatchEvent('#pf-bank', 'change');
   await page.fill('#pf-focus', '10000'); await page.dispatchEvent('#pf-focus', 'change');
-  for (const c of ['Thetford', 'Bridgewatch', 'Martlock', 'Fort Sterling']) {
+  for (const c of ['Thetford', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Brecilien']) {
     await page.uncheck(`#pf-cities input[value="${c}"]`);
   }
   await page.fill('#spec-search', 'fibres');

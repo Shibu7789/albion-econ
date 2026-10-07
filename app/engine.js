@@ -43,7 +43,8 @@
       let b = kind === 1 ? c.raff : c.craft;
       if (item.cc && c.spe[item.cc]) b += c.spe[item.cc];
       if (useFocus) b += C.focusBonus;
-      b += dailyBonus || 0;
+      // bonus du jour : { pct, cat } — ne s'applique qu'à la catégorie annoncée en jeu pour cette ville
+      if (dailyBonus && dailyBonus.pct && (!dailyBonus.cat || dailyBonus.cat === item.cc)) b += dailyBonus.pct;
       return b;
     }
 
@@ -75,9 +76,42 @@
       return b == null ? null : b * (1 - tax);
     }
 
+    /* ---------- Villes d'achat et de vente ---------- */
+    // multiCity : acheter chaque ingrédient dans la ville la moins chère et vendre dans la meilleure,
+    // en payant le transport (Travel Planner) au taux du profil sur la marchandise déplacée.
+    function buyCities(craftCity, prof) { return prof.multiCity ? prof.cities : [craftCity]; }
+    function sellVenues(craftCity, prof) {
+      const base = prof.multiCity ? prof.cities.slice() : [craftCity];
+      if (base.includes('Caerleon')) base.push('Black Market');
+      return base;
+    }
+    const travelOf = (where, craftCity, prof) => (where === craftCity || (where === 'Black Market' && craftCity === 'Caerleon')) ? 0 : (prof.travelPct || 0);
+    function bestBuy(prices, id, craftCity, prof) {
+      let best = null;
+      for (const c of buyCities(craftCity, prof)) {
+        const p = acquire(prices, id, c, prof);
+        if (p == null) continue;
+        const eff = p * (1 + travelOf(c, craftCity, prof));
+        if (!best || eff < best.price) best = { price: eff, city: c, raw: p };
+      }
+      return best;
+    }
+    function bestSell(prices, id, craftCity, prof) {
+      let best = null;
+      for (const v of sellVenues(craftCity, prof)) {
+        const n = dispose(prices, id, v, prof);
+        if (n == null) continue;
+        const eff = n * (1 - travelOf(v, craftCity, prof));
+        if (!best || eff > best.net) best = { venue: v, net: eff };
+      }
+      return best;
+    }
+
     /* ---------- Évaluation d'une recette dans une ville ---------- */
     function stationFee(item, amount, city, prof) {
-      const per100 = (prof.stationFee && prof.stationFee[city]) || 0;
+      // prix saisi par le joueur, sinon le plafond officiel (maxuseagefee) : estimation prudente
+      const saisi = prof.stationFee && prof.stationFee[city];
+      const per100 = saisi != null ? saisi : C.maxStationFee;
       if (!item.v || !per100) return 0;
       return item.v * amount * C.nutritionFactor * per100 / 100;
     }
@@ -92,19 +126,14 @@
       const lines = [];
       for (const [ii, qty, noret] of ings) {
         const ing = items[ii];
-        const p = acquire(prices, ing.id, city, prof);
-        if (p == null) return null;
+        const b = bestBuy(prices, ing.id, city, prof);
+        if (!b) return null;
         const eff = noret ? qty : qty * (1 - R);
-        cost += eff * p;
-        lines.push({ id: ing.id, name: ing.n, qty, price: p, effQty: eff });
+        cost += eff * b.price;
+        lines.push({ id: ing.id, name: ing.n, qty, price: b.raw, city: b.city, effQty: eff });
       }
       cost += stationFee(item, amount, city, prof);
-      const sellVenues = city === 'Caerleon' ? ['Caerleon', 'Black Market'] : [city];
-      let best = null;
-      for (const v of sellVenues) {
-        const net = dispose(prices, item.id, v, prof);
-        if (net != null && (!best || net > best.net)) best = { venue: v, net };
-      }
+      const best = bestSell(prices, item.id, city, prof);
       if (!best) return null;
       const revenue = best.net * amount;
       const fpts = useFocus ? fce(itemIdx, prof.specs, 'f') : 0;
@@ -122,21 +151,22 @@
       if (!item.up) return null;
       const [fromIdx, ings] = item.up;
       const from = items[fromIdx];
-      const pFrom = acquire(prices, from.id, city, prof);
-      if (pFrom == null) return null;
-      let cost = pFrom;
-      const lines = [{ id: from.id, name: from.n, qty: 1, price: pFrom, effQty: 1 }];
+      const bf = bestBuy(prices, from.id, city, prof);
+      if (!bf) return null;
+      let cost = bf.price;
+      const lines = [{ id: from.id, name: from.n, qty: 1, price: bf.raw, city: bf.city, effQty: 1 }];
       for (const [ii, qty] of ings) {
-        const p = acquire(prices, items[ii].id, city, prof);
-        if (p == null) return null;
-        cost += qty * p;
-        lines.push({ id: items[ii].id, name: items[ii].n, qty, price: p, effQty: qty });
+        const b = bestBuy(prices, items[ii].id, city, prof);
+        if (!b) return null;
+        cost += qty * b.price;
+        lines.push({ id: items[ii].id, name: items[ii].n, qty, price: b.raw, city: b.city, effQty: qty });
       }
-      const net = dispose(prices, item.id, city, prof);
-      if (net == null) return null;
+      const bs = bestSell(prices, item.id, city, prof);
+      if (!bs) return null;
+      const net = bs.net;
       return {
         itemIdx, id: item.id, name: item.n, tier: item.t, ench: item.e, kind: 3, kindLabel: KIND_LABEL[3],
-        city, sellVenue: city, useFocus: false, amount: 1, rrr: 0, cost, revenue: net, profit: net - cost,
+        city, sellVenue: bs.venue, useFocus: false, amount: 1, rrr: 0, cost, revenue: net, profit: net - cost,
         margin: (net - cost) / cost, focus: 0, ingredients: lines, unitSell: net, quality: item.q > 1,
       };
     }
@@ -176,7 +206,7 @@
       let n = Math.floor(vol(o.id, o.sellVenue) * prof.liqShare / o.amount);
       for (const l of o.ingredients) {
         if (l.effQty <= 0) continue;
-        n = Math.min(n, Math.floor(vol(l.id, o.city) * prof.liqShare / l.effQty));
+        n = Math.min(n, Math.floor(vol(l.id, l.city || o.city) * prof.liqShare / l.effQty));
       }
       return Math.max(0, n);
     }
@@ -196,14 +226,14 @@
       const chosen = [], usedKey = new Set(), left = {};
       for (const { o, nMax } of cand) {
         if (minutes < prof.minutesPerLine) break;
-        const key = o.id + '|' + o.city;
+        const key = o.id;   // un objet = une seule ligne, dans sa meilleure ville
         if (usedKey.has(key)) continue;
         let n = nMax;
         // les ingrédients partagés entre plusieurs lignes se partagent aussi le volume du marché
         for (const l of o.ingredients) {
           if (l.effQty <= 0) continue;
-          const k = l.id + '|' + o.city;
-          if (!(k in left)) left[k] = ((volumes[l.id] && volumes[l.id][o.city]) || 0) * prof.liqShare;
+          const bc = l.city || o.city, k = l.id + '|' + bc;
+          if (!(k in left)) left[k] = ((volumes[l.id] && volumes[l.id][bc]) || 0) * prof.liqShare;
           n = Math.min(n, Math.floor(left[k] / l.effQty));
         }
         n = Math.min(n, Math.floor(Math.min(capital, capCap) / o.cost));
@@ -211,7 +241,7 @@
         if (n <= 0) continue;
         const line = Object.assign({}, o, { n, totalCost: n * o.cost, totalProfit: n * o.profit, totalFocus: n * o.focus });
         if (line.totalProfit < prof.minLineProfit) continue;
-        for (const l of o.ingredients) left[l.id + '|' + o.city] -= l.effQty * n;
+        for (const l of o.ingredients) left[l.id + '|' + (l.city || o.city)] -= l.effQty * n;
         chosen.push(line);
         usedKey.add(key);
         capital -= line.totalCost; focus -= line.totalFocus; minutes -= prof.minutesPerLine;
@@ -240,7 +270,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, journalValue, acquire, dispose, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

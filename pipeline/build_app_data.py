@@ -142,6 +142,7 @@ consts = {
     'nutritionFactor': float(gd['ItemValueToNutrition']['@factor']),
     'qualityChances': [int(x['@weight']) for x in gd['CraftingQualityChances']['QualityLevel']],
     'salvageResource': 0.2,
+    'maxStationFee': float(gd['BuildingManagement']['@maxuseagefee']),
 }
 
 def dump_version():
