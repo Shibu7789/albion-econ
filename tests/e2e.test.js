@@ -90,6 +90,13 @@ function fakeHistory(url) {
   assert.ok(/profit réel par jour/.test(await page.textContent('#log-sum')), 'résumé après vente');
   console.log('OK journal (mis en vente puis vendu)');
 
+  // Îles : rentabilité des parcelles
+  await page.click('[data-tab="islands"]');
+  await page.click('#plot-run');
+  await page.waitForFunction(() => /Gain net|Aucune culture|Échec/.test(document.querySelector('#plot-out').textContent), null, { timeout: 120000 });
+  assert.ok(!/Échec/.test(await page.textContent('#plot-out')), 'parcelles : ' + (await page.textContent('#plot-out')).slice(0, 200));
+  console.log('OK parcelles :', (await page.locator('#plot-out tbody tr').count()), 'cultures');
+
   // Largeur téléphone : pas de défilement horizontal
   await page.setViewportSize({ width: 390, height: 800 });
   for (const tab of ['today', 'islands', 'log', 'profile', 'about']) {

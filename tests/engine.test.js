@@ -234,4 +234,13 @@ t('chaîne au focus : focus aussi sur l\'étape intermédiaire, coût plus bas, 
   const f4 = E.focusCost(DATA.items[ix4].r[0][1], E.fce(ix4, specs, 'f'));
   near(all.focus, fin.focus + (1 - Rf) * f4, 1e-6, 'focus additionné');
 });
+t('îles : valeur d\'une parcelle de choux (graines, retour, vente brute)', () => {
+  const pr = { T5_CABBAGE: { Lymhurst: P(300, 250) } };
+  const pm = Object.assign({}, prof, { cities: ['Lymhurst'] });
+  const rows = E.plotValue(pr, {}, pm, { seedPrice: { 5: 11580 }, seedsPerPlot: 9, baseYield: 4.5, premiumFactor: 1, islandCities: ['Martlock'] });
+  const r = rows.find(x => x.crop === 'T5_CABBAGE');
+  near(r.perPlotDay, 9 * 4.5, 1e-9, 'récolte');
+  near(r.grow, 9 * 11580 * (1 - 0.8) / (9 * 4.5), 1e-6, 'coût par chou');
+  near(r.perPlotDayNet, 9 * 4.5 * (250 * 0.92 - r.grow), 1e-6, 'gain par parcelle');
+});
 console.log(n, 'tests OK');

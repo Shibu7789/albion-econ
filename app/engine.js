@@ -120,6 +120,9 @@
     }
     let MEMO_PROF = null;
     function unitCost(prices, ii, city, prof, depth, withFocus) {
+      // prix imposé (ex. récolte de l'île au coût des graines) : traité comme un achat « sur l'île »
+      const ov = prof.override && prof.override[items[ii].id];
+      if (ov != null) return { cost: ov, buy: { price: ov, raw: ov, city: 'Île' } };
       const b = bestBuy(prices, items[ii].id, city, prof);
       const m = prof.chains === false ? null : makeCost(prices, ii, city, prof, depth, withFocus);
       if (m && (!b || m.cost < b.price)) return m;
@@ -277,6 +280,66 @@
         }
       });
       return out;
+    }
+
+    /* ---------- Îles : rentabilité d'une parcelle ---------- */
+    // Pour une culture : récolte par parcelle et par jour, coût des graines (moins celles récupérées),
+    // puis meilleur usage : vente brute, ou ingrédient d'une chaîne jusqu'au produit fini.
+    // params : { seedPrice: {tier: prix}, seedsPerPlot, baseYield, premiumFactor, islandCities: [...] }
+    const usedBy = new Map();
+    items.forEach((it, idx) => (it.r || []).forEach(r => r[4].forEach(([ii]) => {
+      if (!usedBy.has(ii)) usedBy.set(ii, new Set()); usedBy.get(ii).add(idx); })));
+    function usersOf(ii, depth) {
+      const out = new Set(); let front = [ii];
+      for (let d = 0; d < depth; d++) {
+        const next = [];
+        for (const x of front) for (const u of usedBy.get(x) || []) if (!out.has(u)) { out.add(u); next.push(u); }
+        front = next;
+      }
+      return [...out];
+    }
+    function plotValue(prices, volumes, prof, params) {
+      const rows = [];
+      for (const pl of DATA.farm.filter(f => f.type === 'plant')) {
+        const crop = pl.recolte && pl.recolte[0]; if (!crop) continue;
+        const cropIdx = index.get(crop.id); if (cropIdx == null) continue;
+        const seedPrice = params.seedPrice[pl.tier];
+        if (!(seedPrice > 0)) continue;
+        for (const isle of params.islandCities) {
+          const fb = (DATA.farmBonus.find(b => b.lieu === isle && b.objet === pl.id) || {}).bonus_ile || 0;
+          const perSeed = params.baseYield * (1 + fb) * params.premiumFactor;          // récolte par graine
+          const perPlotDay = params.seedsPerPlot * perSeed;                            // récolte par parcelle et par jour
+          const seedCostDay = params.seedsPerPlot * seedPrice * (1 - (pl.retour_graine_chance || 0));
+          const grow = seedCostDay / perPlotDay;                                       // coût d'une unité récoltée
+          const pOv = Object.assign({}, prof, { override: { [crop.id]: grow } });
+          // usage 1 : vente brute (meilleure ville autorisée)
+          const raw = bestSell(prices, crop.id, prof.cities[0], Object.assign({}, prof, { multiCity: true }));
+          let best = raw ? { label: 'Vendre la récolte brute', venue: raw.venue, perUnit: raw.net - grow, unitsDay: Infinity } : null;
+          // usage 2 : meilleure recette (jusqu'à 3 niveaux) qui consomme la récolte
+          for (const u of usersOf(cropIdx, 3)) {
+            const it = items[u]; if (!it.tr || !it.r) continue;
+            for (const city of prof.cities) for (const rec of it.r) {
+              const o = evaluate(prices, u, rec, rec[3], city, false, pOv);
+              if (!o || !(o.profit > 0)) continue;
+              const leaf = o.ingredients.find(l => l.id === crop.id && l.city === 'Île');
+              if (!leaf || !(leaf.effQty > 0)) continue;
+              const perUnit = o.profit / leaf.effQty;
+              const h = volumes[o.id] && volumes[o.id][o.sellVenue];
+              const sold = h ? (typeof h === 'object' ? h.n : h) : 0;
+              const unitsDay = sold * prof.liqShare / o.amount * leaf.effQty;           // récolte absorbable par le marché du produit
+              if (unitsDay <= 0) continue;
+              if (!best || perUnit > best.perUnit)
+                best = { label: `${KIND_LABEL[o.kind]} ${o.name}${o.ench ? ' .' + o.ench : ''}`, venue: o.sellVenue, city, perUnit, unitsDay, opp: o };
+            }
+          }
+          if (!best) continue;
+          rows.push({ seed: pl.id, crop: crop.id, cropName: items[cropIdx].n, tier: pl.tier, isle, perPlotDay, grow,
+            use: best.label, venue: best.venue, craftCity: best.city, perUnit: best.perUnit,
+            perPlotDayNet: perPlotDay * best.perUnit,
+            maxPlots: isFinite(best.unitsDay) ? best.unitsDay / perPlotDay : Infinity, opp: best.opp });
+        }
+      }
+      return rows.sort((a, b) => b.perPlotDayNet - a.perPlotDayNet);
     }
 
     /* ---------- Revente entre villes (sans craft) ---------- */
@@ -514,7 +577,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, applyHistory, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, applyHistory, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

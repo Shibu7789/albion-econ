@@ -84,7 +84,7 @@
   }
 
   /* ---------- Analyse du jour ---------- */
-  let lastPlan = null;
+  let lastPlan = null, lastPrices = null, lastVolumes = null;
   function engineProfile(p) {
     return Object.assign({}, p, { capital: Math.max(0, (p.bank || 0) - (p.reserve || 0)) });
   }
@@ -136,6 +136,7 @@
       top.concat(topBM).forEach(o => { vNeed.add(o.id); o.ingredients.forEach(l => vNeed.add(l.id)); (o.outputs || []).forEach(x => vNeed.add(x.id)); });
       setStatus(`Lecture des ventes des 7 derniers jours : ${vNeed.size} objets…`);
       const volumes = await M.fetchVolumes([...vNeed], locs, { onProgress: (d, t) => setStatus(`Lecture des ventes des 7 derniers jours… ${d}/${t}`) });
+      lastPrices = prices; lastVolumes = volumes;
       const checked = E.applyHistory(top, volumes, prices, pDay).sort((a, b) => b.profit - a.profit);
       lastPlan = E.plan(checked, volumes, pDay);
       const checkedBM = E.applyHistory(topBM, volumes, prices, pBM).sort((a, b) => b.profit - a.profit);
@@ -350,6 +351,62 @@
     } catch (e) { msg('Code illisible : recopie-le en entier, sans rien ajouter.'); }
   }
 
+  /* ---------- Îles : rentabilité des parcelles ---------- */
+  // Prix des graines au PNJ relevés par Shibu le 22/08/2026 (ils suivent le cours de l'or : à mettre à jour)
+  const DEFAULT_SEED = { 1: 2312, 2: 3468, 3: 5780, 4: 8670, 5: 11580, 6: 17340, 7: 26010, 8: 34680 };
+  function renderPlotForm() {
+    const p = prof(); const sp = p.seedPrice || DEFAULT_SEED;
+    $('#plot-seeds').innerHTML = [1, 2, 3, 4, 5, 6, 7, 8].map(t => `<label class="field"><span>Graine T${t}</span><input type="number" data-seed="${t}" value="${sp[t] ?? ''}"></label>`).join('');
+    const isl = p.islandCities || ['Bridgewatch', 'Thetford', 'Fort Sterling', 'Martlock', 'Lymhurst'];
+    $('#plot-isles').innerHTML = E.CITIES.filter(c => c !== 'Caerleon').map(c => `<label class="chip"><input type="checkbox" value="${c}" ${isl.includes(c) ? 'checked' : ''}> Île de ${c}</label>`).join('');
+  }
+  async function analyzePlots() {
+    const p0 = engineProfile(prof());
+    const seedPrice = Object.fromEntries($$('[data-seed]').filter(i => i.value !== '').map(i => [i.dataset.seed, +i.value]));
+    const islandCities = $$('#plot-isles input:checked').map(i => i.value);
+    updateProf({ seedPrice, islandCities });
+    const p = Object.assign({}, p0, { blackMarket: false });
+    const out = $('#plot-out'); $('#plot-run').disabled = true;
+    try {
+      let prices = lastPrices, volumes = lastVolumes;
+      // sans analyse du jour : lecture ciblée (cultures, produits qui les utilisent, leurs ingrédients)
+      const cropIdx = DATA.farm.filter(f => f.type === 'plant').map(f => E.index.get(f.recolte[0].id)).filter(i => i != null);
+      const ids = new Set();
+      for (const ci of cropIdx) {
+        ids.add(DATA.items[ci].id);
+        for (const u of usersDeep(ci)) { const it = DATA.items[u]; ids.add(it.id); (it.r || []).forEach(r => r[4].forEach(([ii]) => ids.add(DATA.items[ii].id))); }
+      }
+      const missing = !prices ? [...ids] : [...ids].filter(id => !prices[id]);
+      if (missing.length) {
+        out.innerHTML = `<p class="muted">Lecture des prix de ${missing.length} objets…</p>`;
+        prices = Object.assign({}, prices || {}, await M.fetchPrices(missing, p.cities));
+      }
+      const vMissing = [...ids].filter(id => !(volumes && volumes[id]));
+      if (vMissing.length) {
+        out.innerHTML = `<p class="muted">Lecture des ventes des 7 derniers jours pour ${vMissing.length} objets…</p>`;
+        volumes = Object.assign({}, volumes || {}, await M.fetchVolumes(vMissing, p.cities));
+      }
+      const rows = E.plotValue(prices, volumes, p, { seedPrice, seedsPerPlot: 9, baseYield: 4.5, premiumFactor: p.premium ? 2 : 1, islandCities });
+      const bestPerCrop = []; const seen = new Set();
+      for (const r of rows) { const k = r.crop; if (seen.has(k)) continue; seen.add(k); bestPerCrop.push(r); }
+      out.innerHTML = bestPerCrop.length ? `<div class="scroll"><table><thead><tr><th>Culture</th><th>Meilleure île</th><th class="r">Récolte / parcelle / jour</th><th>Meilleur usage</th><th class="r">Gain net / parcelle / jour</th><th class="r">Par semaine</th><th class="r">Parcelles absorbées par le marché</th></tr></thead><tbody>
+        ${bestPerCrop.map(r => `<tr><td>${esc(r.cropName)} <span class="tier">T${r.tier}</span></td><td>${esc(r.isle)}</td><td class="r">${fmt(r.perPlotDay)}</td>
+          <td>${esc(r.use)}${r.craftCity ? ' <span class="muted">à ' + esc(r.craftCity) + '</span>' : ''}${r.venue && r.venue !== r.craftCity ? ' <span class="muted">· vente ' + esc(r.venue) + '</span>' : ''}</td>
+          <td class="r ${r.perPlotDayNet > 0 ? 'pos' : 'neg'}">${fmtK(r.perPlotDayNet)}</td><td class="r">${fmtK(r.perPlotDayNet * 7)}</td><td class="r">${isFinite(r.maxPlots) ? fmt(Math.floor(r.maxPlots)) : '—'}</td></tr>`).join('')}
+        </tbody></table></div>
+        <p class="muted small">Récolte : 9 graines par parcelle × 4,5 en moyenne (3 à 6)${p.premium ? ' × 2 avec Premium (selon le wiki, à vérifier sur ta prochaine récolte)' : ''}, + bonus de la ville de l'île. Sans arrosage au focus. Le gain d'un usage en chaîne compte tous les autres ingrédients au prix du marché et les étapes de craft ; il est limité par ce que le marché du produit fini absorbe chaque jour.</p>`
+        : '<p class="muted">Aucune culture rentable avec ces prix.</p>';
+    } catch (e) { out.innerHTML = `<p class="err">Échec de la lecture des prix : ${esc(e.message)}</p>`; }
+    finally { $('#plot-run').disabled = false; }
+  }
+  function usersDeep(ci) {
+    const out = new Set(); let front = [ci];
+    for (let d = 0; d < 3; d++) { const next = [];
+      DATA.items.forEach((it, idx) => { if (!out.has(idx) && (it.r || []).some(r => r[4].some(([ii]) => front.includes(ii)))) { out.add(idx); next.push(idx); } });
+      front = next; }
+    return [...out];
+  }
+
   /* ---------- Îles : travailleurs ---------- */
   async function analyzeLaborers() {
     const p = engineProfile(prof());
@@ -399,6 +456,8 @@
     $('#pf-import').addEventListener('click', importProfile);
     $('#lab-city').innerHTML = E.CITIES.map(c => `<option>${c}</option>`).join('');
     $('#lab-run').addEventListener('click', analyzeLaborers);
+    $('#plot-run').addEventListener('click', analyzePlots);
+    renderPlotForm();
     $('#log-clear').addEventListener('click', () => { const b = $('#log-clear');
       if (b.dataset.arm) { store.set(logKey(), []); renderLog(); delete b.dataset.arm; b.textContent = 'Effacer le journal'; }
       else { b.dataset.arm = '1'; b.textContent = 'Confirmer l\'effacement'; setTimeout(() => { delete b.dataset.arm; b.textContent = 'Effacer le journal'; }, 4000); } });

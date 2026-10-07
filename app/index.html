@@ -122,7 +122,13 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
 </section>
 
 <section class="panel" id="p-islands" hidden>
-  <h2>Travailleurs</h2>
+  <h2>Parcelles de culture</h2>
+  <p class="lead">Ce que rapporterait une parcelle de chaque culture, selon l'île : vente brute ou chaîne complète jusqu'au produit fini. Compare avec ce que te rapporte l'emplacement aujourd'hui avant de changer.</p>
+  <div class="card"><h3>Prix des graines au PNJ</h3><p class="muted small">Ils suivent le cours de l'or : mets-les à jour de temps en temps.</p><div class="grid" id="plot-seeds"></div>
+    <h3 style="margin-top:14px">Îles où tu peux planter</h3><div class="chips" id="plot-isles"></div>
+    <div class="row" style="margin-top:12px"><button class="ghost" id="plot-run">Calculer</button></div></div>
+  <div id="plot-out"></div>
+  <h2 style="margin-top:32px">Travailleurs</h2>
   <p class="lead">Compare, au prix du jour, la valeur du butin d'un carnet plein et le prix d'achat de ce carnet. Un gain positif veut dire : acheter le carnet plein et le donner à un travailleur rapporte plus que ce qu'il coûte.</p>
   <div class="card row">
     <label class="field"><span>Ville du marché</span><select id="lab-city"></select></label>
