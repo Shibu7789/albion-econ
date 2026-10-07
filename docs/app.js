@@ -138,6 +138,8 @@
       const checkedBM = E.applyHistory(topBM, volumes, prices, pBM).sort((a, b) => b.profit - a.profit);
       // sortie hebdomadaire : quantités sur 7 jours de volume, pas de limite de temps de session
       lastPlan.bm = E.plan(checkedBM, volumes, Object.assign({}, pBM, { liqShare: pBM.liqShare * 7, minutes: 1e6, focus: 0 }));
+      const volOf = (id, c) => { const h = volumes[id] && volumes[id][c]; return h ? (typeof h === 'object' ? h.n : h) : 0; };
+      for (const l of lastPlan.lines.concat(lastPlan.bm.lines)) l.dailyVol = volOf(l.id, l.sellVenue);
       lastPlan.diag = { found: opps.length, checked: checked.length };
       lastPlan.capitalAvail = p.capital;
       lastPlan.at = new Date().toISOString();
@@ -195,39 +197,56 @@
         <li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)) / (1 - (l.sellVenue !== l.city && !(bm && l.city === 'Caerleon') ? (p.travelPct || 0) : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>
       </ol>
       <footer><span class="muted">Investissement ${fmtK(l.totalCost)}</span>
-        <label class="real">Encaissé réel <input type="number" inputmode="numeric" id="real-${i}" placeholder="argent reçu"></label>
-        <button class="ghost" data-log="${i}">Noter</button></footer></article>`;
+        ${l.dailyVol ? `<span class="muted">Il s'en vend ${fmt(l.dailyVol)} par jour à ${esc(l.sellVenue)} : ta quantité = ${Math.max(1, Math.round(l.n * l.amount / l.dailyVol * 100))} % d'une journée de ventes</span>` : ''}
+        <button class="ghost real" data-start="${i}">Mis en vente</button></footer></article>`;
   }
 
   /* ---------- Journal des résultats ---------- */
   const logKey = () => 'ae.log.' + profiles.active;
-  function logLine(i) {
+  function startLine(i) {
     const l = lastPlan && (String(i).startsWith('bm') ? lastPlan.bm && lastPlan.bm.lines[+String(i).slice(2)] : lastPlan.lines[i]); if (!l) return;
-    const v = +$('#real-' + i).value;
-    if (!$('#real-' + i).value) { setStatus('Indique l\'argent réellement reçu avant de noter.', 'warn'); return; }
     const log = store.get(logKey(), []);
-    log.push({ date: new Date().toISOString(), item: l.name + (l.ench ? ' .' + l.ench : ''), city: l.city, kind: l.kindLabel,
-      n: l.n, cost: l.totalCost, expected: l.totalProfit, real: v - l.totalCost, received: v, focus: l.totalFocus });
+    log.push({ id: Date.now().toString(36), status: 'en vente', date: new Date().toISOString(), item: l.name + (l.ench ? ' .' + l.ench : ''),
+      city: l.city, venue: l.sellVenue, kind: l.kindLabel, n: l.n, qty: l.n * l.amount, cost: l.totalCost, expected: l.totalProfit, focus: l.totalFocus });
     store.set(logKey(), log);
     $('#done-' + i).checked = true;
-    setStatus('Résultat noté.', 'ok'); renderLog();
+    const b = $(`[data-start="${i}"]`); if (b) { b.disabled = true; b.textContent = 'En vente : suivi dans Résultats'; }
+    renderLog();
+  }
+  function sellEntry(id) {
+    const log = store.get(logKey(), []);
+    const r = log.find(x => x.id === id); if (!r) return;
+    const v = $('#recv-' + id).value;
+    if (v === '') { $('#log-msg').textContent = 'Indique l\'argent reçu au total pour cette ligne.'; return; }
+    r.received = +v; r.real = r.received - r.cost; r.status = 'vendu'; r.soldAt = new Date().toISOString();
+    r.delayH = (Date.parse(r.soldAt) - Date.parse(r.date)) / 3.6e6;
+    store.set(logKey(), log); $('#log-msg').textContent = ''; renderLog();
   }
   function renderLog() {
     const log = store.get(logKey(), []);
     const box = $('#log');
-    if (!log.length) { box.innerHTML = '<p class="muted">Aucun résultat noté. Après chaque ligne faite, indique l\'argent reçu dans « Encaissé réel » : l\'outil compare alors le prévu et le réel.</p>'; $('#log-sum').textContent = ''; return; }
-    const days = {};
-    log.forEach(r => { const d = r.date.slice(0, 10); (days[d] = days[d] || { real: 0, exp: 0, n: 0 }); days[d].real += r.real; days[d].exp += r.expected; days[d].n++; });
-    const dk = Object.keys(days).sort().reverse();
-    const avg = dk.reduce((s, d) => s + days[d].real, 0) / dk.length;
-    const tot = log.reduce((s, r) => ({ real: s.real + r.real, exp: s.exp + r.expected }), { real: 0, exp: 0 });
-    $('#log-sum').innerHTML = `<b>${fmtK(avg)}</b> de profit réel par jour en moyenne sur ${dk.length} jour${dk.length > 1 ? 's' : ''} · réalisé ${tot.exp ? Math.round(tot.real / tot.exp * 100) : 0} % du prévu`;
-    box.innerHTML = `<div class="scroll"><table><thead><tr><th>Jour</th><th>Lignes</th><th class="r">Prévu</th><th class="r">Réel</th><th class="r">Écart</th></tr></thead><tbody>
-      ${dk.map(d => `<tr><td>${new Date(d).toLocaleDateString('fr-FR')}</td><td>${days[d].n}</td><td class="r">${fmtK(days[d].exp)}</td><td class="r">${fmtK(days[d].real)}</td><td class="r ${days[d].real >= days[d].exp ? 'pos' : 'neg'}">${fmtK(days[d].real - days[d].exp)}</td></tr>`).join('')}
-      </tbody></table></div>
-      <details><summary>Détail des lignes (${log.length})</summary><div class="scroll"><table><thead><tr><th>Date</th><th>Objet</th><th>Ville</th><th class="r">Prévu</th><th class="r">Réel</th></tr></thead><tbody>
-      ${log.slice().reverse().map(r => `<tr><td>${new Date(r.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</td><td>${esc(r.item)}</td><td>${esc(r.city)}</td><td class="r">${fmtK(r.expected)}</td><td class="r">${fmtK(r.real)}</td></tr>`).join('')}
-      </tbody></table></div></details>`;
+    const open = log.filter(r => r.status === 'en vente');
+    const sold = log.filter(r => r.status !== 'en vente' && r.real != null)
+      .map(r => Object.assign({ soldAt: r.date, delayH: 0 }, r));   // anciennes entrées notées en une fois
+    const locked = open.reduce((s, r) => s + r.cost, 0);
+    $('#k-locked') && ($('#k-locked').textContent = locked ? `${fmtK(locked)} bloqués dans ${open.length} vente${open.length > 1 ? 's' : ''} en cours` : '');
+    if (!log.length) { box.innerHTML = '<p class="muted">Rien en cours. Quand tu as acheté et mis en vente une ligne, clique « Mis en vente » : elle apparaît ici. Quand tout est vendu, indique l\'argent reçu : l\'outil mesure ton profit réel et ton délai de vente.</p>'; $('#log-sum').textContent = ''; return; }
+    let sum = '';
+    if (sold.length) {
+      const days = new Set(sold.map(r => r.soldAt.slice(0, 10))).size;
+      const real = sold.reduce((s, r) => s + r.real, 0), exp = sold.reduce((s, r) => s + r.expected, 0);
+      const delay = sold.reduce((s, r) => s + r.delayH, 0) / sold.length;
+      sum = `<b>${fmtK(real / days)}</b> de profit réel par jour (${days} jour${days > 1 ? 's' : ''} de ventes) · réalisé ${exp ? Math.round(real / exp * 100) : 0} % du prévu · délai de vente moyen <b>${delay < 24 ? Math.round(delay) + ' h' : (delay / 24).toFixed(1).replace('.', ',') + ' j'}</b>`;
+    }
+    $('#log-sum').innerHTML = (sum ? sum + '<br>' : '') + (locked ? `${fmtK(locked)} bloqués dans ${open.length} vente${open.length > 1 ? 's' : ''} en cours` : '');
+    const ago = d => { const h = (Date.now() - Date.parse(d)) / 3.6e6; return h < 24 ? Math.round(h) + ' h' : (h / 24).toFixed(1).replace('.', ',') + ' j'; };
+    box.innerHTML = (open.length ? `<h3>En vente</h3><div class="scroll"><table><thead><tr><th>Depuis</th><th>Objet</th><th>Vente à</th><th class="r">Investi</th><th class="r">Prévu</th><th>Argent reçu au total</th><th></th></tr></thead><tbody>
+      ${open.map(r => `<tr><td>${ago(r.date)}</td><td>${esc(r.item)} × ${fmt(r.qty)}</td><td>${esc(r.venue || r.city)}</td><td class="r">${fmtK(r.cost)}</td><td class="r">+${fmtK(r.expected)}</td>
+        <td><input type="number" id="recv-${r.id}" placeholder="argent reçu"></td><td><button class="ghost" data-sold="${r.id}">Vendu</button></td></tr>`).join('')}
+      </tbody></table></div><p id="log-msg" class="warn small"></p>` : '<p id="log-msg"></p>')
+      + (sold.length ? `<h3>Vendu</h3><div class="scroll"><table><thead><tr><th>Vendu le</th><th>Objet</th><th class="r">Délai</th><th class="r">Prévu</th><th class="r">Réel</th></tr></thead><tbody>
+      ${sold.slice().reverse().map(r => `<tr><td>${new Date(r.soldAt).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}</td><td>${esc(r.item)}</td><td class="r">${r.delayH < 24 ? Math.round(r.delayH) + ' h' : (r.delayH / 24).toFixed(1).replace('.', ',') + ' j'}</td><td class="r">${fmtK(r.expected)}</td><td class="r ${r.real >= r.expected ? 'pos' : 'neg'}">${fmtK(r.real)}</td></tr>`).join('')}
+      </tbody></table></div>` : '');
   }
 
   /* ---------- Profil : formulaire ---------- */
@@ -334,7 +353,8 @@
     $$('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
     showTab(store.get('ae.tab', 'today'));
     $('#run').addEventListener('click', analyze);
-    $('#plan').addEventListener('click', e => { const b = e.target.closest('[data-log]'); if (b) logLine(b.dataset.log.startsWith('bm') ? b.dataset.log : +b.dataset.log); });
+    $('#plan').addEventListener('click', e => { const b = e.target.closest('[data-start]'); if (b) startLine(b.dataset.start.startsWith('bm') ? b.dataset.start : +b.dataset.start); });
+    $('#log').addEventListener('click', e => { const b = e.target.closest('[data-sold]'); if (b) sellEntry(b.dataset.sold); });
     $('#p-profile').addEventListener('change', e => { if (e.target.dataset.spec !== undefined) {
       const v = e.target.value; const s = Object.assign({}, prof().specs);
       if (v === '' || +v === 0) delete s[e.target.dataset.spec]; else s[e.target.dataset.spec] = Math.max(0, Math.min(100, +v));

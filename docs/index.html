@@ -44,6 +44,7 @@ button{font:600 1rem var(--f-body);border-radius:8px;cursor:pointer}
 .ghost{background:none;border:1px solid var(--line);color:var(--fg);padding:7px 12px}
 #status{min-height:1.5em;color:var(--muted)}
 #status[data-kind="ok"]{color:var(--pos)} #status[data-kind="err"]{color:var(--neg)} #status[data-kind="warn"]{color:var(--warn)}
+.warn{color:var(--warn)}
 .warnbox{border:1px solid var(--warn);color:var(--warn);background:var(--accent-soft);padding:10px 12px;border-radius:8px;margin-bottom:16px;font-size:.95rem}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
@@ -109,6 +110,7 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
   <p class="lead">L'outil lit les prix du marché européen, calcule chaque recette dans tes villes avec ta spécialisation, et retient les lignes qui tiennent dans ton temps, ton capital et ton focus.</p>
   <div id="fee-warn" class="warnbox" hidden></div>
   <div class="runbar"><button class="primary" id="run">Analyser le marché</button><span id="status" role="status"></span></div>
+  <p class="muted small" id="k-locked"></p>
   <div class="kpis" id="kpis" hidden>
     <div class="kpi main"><span>Profit prévu</span><b id="k-profit"></b></div>
     <div class="kpi"><span>Capital engagé</span><b id="k-capital"></b><small id="k-capital-of" class="muted"></small></div>
@@ -147,7 +149,7 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
   </div>
   <form onsubmit="return false">
   <div class="card"><h3>Ressources du jour</h3><div class="grid">
-    <label class="field"><span>Banque totale (argent)</span><input type="number" id="pf-bank" min="0"></label>
+    <label class="field"><span>Argent disponible (hors objets en vente)</span><input type="number" id="pf-bank" min="0"></label>
     <label class="field"><span>Réserve intouchable</span><input type="number" id="pf-reserve" min="0"></label>
     <label class="field"><span>Focus disponible</span><input type="number" id="pf-focus" min="0" max="30000"></label>
     <label class="field"><span>Temps pour l'économie (minutes)</span><input type="number" id="pf-minutes" min="5"></label>

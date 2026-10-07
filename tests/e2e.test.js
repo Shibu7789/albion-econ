@@ -80,12 +80,15 @@ function fakeHistory(url) {
   assert.ok(profit && profit !== '—', 'profit affiché');
   console.log(`OK analyse : ${lines} lignes, profit prévu ${profit}, ${calls} appels API simulés`);
 
-  // Journal
-  await page.fill('#real-0', '1000000');
-  await page.click('[data-log="0"]');
+  // Journal en deux temps : mis en vente, puis vendu
+  await page.click('[data-start="0"]');
   await page.click('[data-tab="log"]');
-  assert.ok((await page.locator('#log table tbody tr').count()) >= 1, 'ligne de journal');
-  console.log('OK journal');
+  assert.ok((await page.locator('[data-sold]').count()) === 1, 'ligne en vente');
+  const rid = await page.getAttribute('[data-sold]', 'data-sold');
+  await page.fill('#recv-' + rid, '1000000');
+  await page.click('[data-sold]');
+  assert.ok(/profit réel par jour/.test(await page.textContent('#log-sum')), 'résumé après vente');
+  console.log('OK journal (mis en vente puis vendu)');
 
   // Largeur téléphone : pas de défilement horizontal
   await page.setViewportSize({ width: 390, height: 800 });
