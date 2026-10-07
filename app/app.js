@@ -29,6 +29,7 @@
     { key: 'mount', label: 'Montures', test: it => it.cat === 'mounts' },
     { key: 'up', label: 'Amélioration (runes, âmes, reliques)', test: it => !!it.up },
     { key: 'flip', label: 'Revente entre villes (sans craft)', test: () => false },
+    { key: 'salv', label: 'Recyclage (acheter, recycler, revendre les matières)', test: () => false },
     { key: 'other', label: 'Autres (artefacts, cartes…)', test: it => ['artefacts', 'other', 'crafting', 'gathering'].includes(it.cat) },
   ];
   function familyOf(it) { const f = FAMILIES.find(f => f.key !== 'up' && f.key !== 'raff' && f.key !== 'trans' && f.test(it)); return f ? f.key : 'other'; }
@@ -50,7 +51,7 @@
   const DEFAULT_PROFILE = {
     name: 'Principal', premium: false, focus: 0, bank: 0, reserve: 10000000,
     cities: ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'],
-    multiCity: true, travelPct: 0.05, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip'],
+    multiCity: true, travelPct: 0.05, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
     maxAge: 12, liqShare: 0.15, maxShare: 0.25, minMargin: 0.05, minutes: 45, minutesPerLine: 5,
     minLineProfit: 10000, stationFee: {}, dailyBonus: {}, specs: {},
   };
@@ -68,6 +69,7 @@
   // Nouvelle activité « Revente » : activée une fois dans les profils existants
   for (const pr of Object.values(profiles.list)) {
     if (pr.families && !pr.flipAdded) { if (!pr.families.includes('flip')) pr.families.push('flip'); pr.flipAdded = true; }
+    if (pr.families && !pr.salvAdded) { if (!pr.families.includes('salv')) pr.families.push('salv'); pr.salvAdded = true; }
   }
   store.set('ae.profiles', profiles);
   const prof = () => Object.assign({}, DEFAULT_PROFILE, profiles.list[profiles.active]);
@@ -105,10 +107,11 @@
     $('#plan').innerHTML = '<div class="empty"><p>Analyse en cours : lecture des prix et calcul de chaque recette…</p></div>'; $('#kpis').hidden = true;
     try {
       const filt = itemFilter(p);
-      const doFlip = p.families.includes('flip');
+      const doFlip = p.families.includes('flip'), doSalv = p.families.includes('salv');
       const need = new Set();
       DATA.items.forEach(it => {
         if (it.tr && doFlip && (it.t >= 4 || it.cat === 'treasures')) need.add(it.id);
+        if (it.tr && doSalv && it.sv) { need.add(it.id); it.sv[2].forEach(([ii]) => need.add(DATA.items[ii].id)); }
         if (!it.tr || !filt(it)) return;
         need.add(it.id);
         (it.r || []).forEach(r => r[4].forEach(([ii]) => need.add(DATA.items[ii].id)));
@@ -120,7 +123,7 @@
       // Liste du jour sans Black Market (trajet risqué) ; le Black Market a sa propre liste, pour une sortie par semaine
       const pDay = Object.assign({}, p, { blackMarket: false });
       const pBM = Object.assign({}, p, { blackMarket: 'only' });
-      const opps = E.opportunities(prices, pDay, filt).concat(doFlip ? E.flips(prices, pDay) : []);
+      const opps = E.opportunities(prices, pDay, filt).concat(doFlip ? E.flips(prices, pDay) : [], doSalv ? E.salvages(prices, pDay) : []);
       const oppsBM = p.cities.includes('Caerleon') ? E.opportunities(prices, pBM, filt).concat(doFlip ? E.flips(prices, pBM) : []) : [];
       opps.sort((a, b) => b.profit - a.profit);
       // les 1 000 objets les plus prometteurs (toutes villes de craft confondues) passent au contrôle par l'historique
@@ -130,7 +133,7 @@
       for (const o of oppsBM) { if (keepBM.size >= 300) break; keepBM.add(o.id); }
       const top = opps.filter(o => keep.has(o.id)), topBM = oppsBM.filter(o => keepBM.has(o.id));
       const vNeed = new Set();
-      top.concat(topBM).forEach(o => { vNeed.add(o.id); o.ingredients.forEach(l => vNeed.add(l.id)); });
+      top.concat(topBM).forEach(o => { vNeed.add(o.id); o.ingredients.forEach(l => vNeed.add(l.id)); (o.outputs || []).forEach(x => vNeed.add(x.id)); });
       setStatus(`Lecture des ventes des 7 derniers jours : ${vNeed.size} objets…`);
       const volumes = await M.fetchVolumes([...vNeed], locs, { onProgress: (d, t) => setStatus(`Lecture des ventes des 7 derniers jours… ${d}/${t}`) });
       const checked = E.applyHistory(top, volumes, prices, pDay).sort((a, b) => b.profit - a.profit);
@@ -139,7 +142,7 @@
       // sortie hebdomadaire : quantités sur 7 jours de volume, pas de limite de temps de session
       lastPlan.bm = E.plan(checkedBM, volumes, Object.assign({}, pBM, { liqShare: pBM.liqShare * 7, minutes: 1e6, focus: 0 }));
       const volOf = (id, c) => { const h = volumes[id] && volumes[id][c]; return h ? (typeof h === 'object' ? h.n : h) : 0; };
-      for (const l of lastPlan.lines.concat(lastPlan.bm.lines)) l.dailyVol = volOf(l.id, l.sellVenue);
+      for (const l of lastPlan.lines.concat(lastPlan.bm.lines)) l.dailyVol = l.salvage ? 0 : volOf(l.id, l.sellVenue);
       lastPlan.diag = { found: opps.length, checked: checked.length };
       lastPlan.capitalAvail = p.capital;
       lastPlan.at = new Date().toISOString();
@@ -168,7 +171,7 @@
     $('#k-time').textContent = fmt(pl.minutesUsed) + ' min';
     $('#k-at').textContent = new Date(pl.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
     const byCity = {};
-    pl.lines.forEach((l, i) => { const g = (l.flip ? 'Revente — acheter à ' : 'Crafter à ') + l.city; (byCity[g] = byCity[g] || []).push([l, i]); });
+    pl.lines.forEach((l, i) => { const g = (l.flip ? 'Revente — acheter à ' : l.salvage ? 'Recyclage — acheter à ' : 'Crafter à ') + l.city; (byCity[g] = byCity[g] || []).push([l, i]); });
     const p = prof();
     const bm = pl.bm && pl.bm.lines.length ? `<section class="city"><h3>Sortie Black Market <span class="muted">une fois par semaine, en groupe · ${fmtK(pl.bm.totalProfit)} prévus pour ${fmtK(pl.bm.capitalUsed)} engagés</span></h3>
       <p class="muted small">Trajet risqué (zones rouges autour de Caerleon) : ces lignes ne sont pas dans ta liste du jour. Quantités calculées sur une semaine de ventes.</p>
@@ -190,11 +193,13 @@
         <div class="gain"><b>+${fmtK(l.totalProfit)}</b><span class="muted">marge ${Math.round(l.margin * 100)} %</span></div></header>
       <ol class="steps">
         <li><b>${buyVerb}</b><ul>${ings}</ul></li>
-        ${l.kind === 4 ? `<li><b>Transporter</b> vers ${esc(l.sellVenue === 'Black Market' ? 'le Black Market (Caerleon)' : l.sellVenue)} <span class="muted">Travel Planner</span></li>`
+        ${l.kind === 5 ? `<li><b>Recycler</b> ${fmt(l.n)} objet${l.n > 1 ? 's' : ''}</li>
+          <li><b>Vendre les matières</b><ul>${l.outputs.map(x => `<li><span class="q">${fmt(x.units * l.n)}</span> ${esc(x.name)} <span class="muted">${x.venue !== l.city ? '· <b>' + esc(x.venue) + '</b>' : ''}</span></li>`).join('')}</ul></li>`
+          : l.kind === 4 ? `<li><b>Transporter</b> vers ${esc(l.sellVenue === 'Black Market' ? 'le Black Market (Caerleon)' : l.sellVenue)} <span class="muted">Travel Planner</span></li>`
           : l.kind === 3 ? `<li><b>Améliorer</b> ${fmt(l.n)} fois à la station de la pièce</li>`
           : `<li><b>${l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter'}</b> ${fmt(l.n)} fois${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}
           ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
-        <li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)) / (1 - (l.sellVenue !== l.city && !(bm && l.city === 'Caerleon') ? (p.travelPct || 0) : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>
+        ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)) / (1 - (l.sellVenue !== l.city && !(bm && l.city === 'Caerleon') ? (p.travelPct || 0) : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
       </ol>
       <footer><span class="muted">Investissement ${fmtK(l.totalCost)}</span>
         ${l.dailyVol ? `<span class="muted">Il s'en vend ${fmt(l.dailyVol)} par jour à ${esc(l.sellVenue)} : ta quantité = ${Math.max(1, Math.round(l.n * l.amount / l.dailyVol * 100))} % d'une journée de ventes</span>` : ''}
@@ -267,7 +272,7 @@
     $('#pf-premium').checked = !!p.premium;
     $('#pf-focus').value = p.focus; $('#pf-bank').value = p.bank; $('#pf-reserve').value = p.reserve;
     $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes;
-    $('#pf-multi').checked = !!p.multiCity; $('#pf-travel').value = Math.round((p.travelPct || 0) * 1000) / 10;
+    $('#pf-multi').checked = !!p.multiCity; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = Math.round((p.travelPct || 0) * 1000) / 10;
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
     $('#pf-fees').innerHTML = E.CITIES.map(c => `<label class="field"><span>${c}</span><input type="number" data-fee="${c}" value="${p.stationFee[c] ?? ''}" placeholder="1000"></label>`).join('');
@@ -292,7 +297,7 @@
     updateProf({
       premium: $('#pf-premium').checked, focus: +$('#pf-focus').value || 0, bank: +$('#pf-bank').value || 0,
       reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value,
-      multiCity: $('#pf-multi').checked, travelPct: (+$('#pf-travel').value || 0) / 100, minutes: +$('#pf-minutes').value || 45,
+      multiCity: $('#pf-multi').checked, salvageRound: $('#pf-salvround').value, travelPct: (+$('#pf-travel').value || 0) / 100, minutes: +$('#pf-minutes').value || 45,
       cities: $$('#pf-cities input:checked').map(i => i.value), families: $$('#pf-families input:checked').map(i => i.value),
       stationFee: Object.fromEntries($$('[data-fee]').filter(i => i.value !== '').map(i => [i.dataset.fee, +i.value])),
       dailyBonus: Object.fromEntries($$('[data-daily]').filter(i => i.value !== '' && +i.value > 0)

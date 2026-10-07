@@ -202,4 +202,12 @@ t('planificateur : avec peu de capital, le rendement par argent investi passe av
   assert.ok(!ids.includes('GROS') && ids.length === 3, 'les trois petites lignes : ' + ids);
   near(pl.totalProfit, 180000, 1e-6, 'profit');
 });
+t('recyclage : carte d\'expédition D1 → 20 % de 2 sceaux, exact ou arrondi', () => {
+  const ix = E.index.get('QUESTITEM_EXP_TOKEN_D1_T6_EXP_HRD_UNDEAD_RECRUITMENT');
+  const pr = { QUESTITEM_EXP_TOKEN_D1_T6_EXP_HRD_UNDEAD_RECRUITMENT: { Lymhurst: P(15000, 14000) }, QUESTITEM_TOKEN_ROYAL_T6: { Lymhurst: P(50000, 47000) } };
+  const ex = E.salvageEval(pr, ix, 'Lymhurst', prof);
+  near(ex.revenue, 0.4 * 47000 * 0.92, 1e-6, 'exact'); near(ex.cost, 15000, 1e-9, 'achat');
+  const ce = E.salvageEval(pr, ix, 'Lymhurst', Object.assign({}, prof, { salvageRound: 'ceil' }));
+  near(ce.revenue, 1 * 47000 * 0.92, 1e-6, 'arrondi'); assert.ok(ce.profit > 0);
+});
 console.log(n, 'tests OK');

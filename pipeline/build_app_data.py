@@ -40,6 +40,29 @@ for mid, (r, st, recs) in targets.items():
         for i in r['amelioration']['ingredients']:
             need.add(i['id'])
 
+# Objets recyclables échangeables ayant une recette : on garde la recette pour calculer ce que rend le recyclage
+raw_items = {}
+for kind, lst in json.load(open(os.path.join(DUMP, 'items.json'), encoding='utf-8'))['items'].items():
+    if isinstance(lst, list):
+        for it in lst:
+            raw_items[it['@uniquename']] = it
+def salvage_factor(base_id):
+    it = raw_items.get(base_id) or {}
+    rc = it.get('craftingrequirements')
+    rc = rc[0] if isinstance(rc, list) else (rc or {})
+    return float(rc.get('@salvageitemfactor', 1))
+salv = {}
+for mid, r in objets.items():
+    if not (r['echangeable'] and r['recyclable']): continue
+    rc = next((x for x in r['recettes'] if x['type'] == 'craft' and x['ingredients']), None)
+    if not rc: continue
+    f = salvage_factor(mid.split('@')[0])
+    if f <= 0: continue
+    salv[mid] = (f, rc)
+    need.add(mid)
+    for i in rc['ingredients']:
+        need.add(i['id'])
+
 farm = J('agriculture_elevage.json')
 for a in farm:
     need.add(a['id'])
@@ -67,7 +90,11 @@ STATION_KIND = lambda st: sorted({re.sub(r'^T\d_', '', s) for s in st})
 items = []
 for mid in ids:
     r = objets[mid]
-    e = {'id': mid, 'n': r['nom_fr'] or r['nom_en'] or mid, 't': r['tier'], 'e': r['enchant'],
+    nm = r['nom_fr'] or r['nom_en']
+    mexp = re.match(r'QUESTITEM_EXP_TOKEN_D(\d+)_T(\d)_EXP_HRD_(\w+)', mid)
+    if not nm and mexp:
+        nm = f"Carte d'expédition extrême D{mexp.group(1)} (T{mexp.group(2)}, {mexp.group(3).replace('_', ' ').lower()})"
+    e = {'id': mid, 'n': nm or mid, 't': r['tier'], 'e': r['enchant'],
          'cat': r['categorie'], 'sc': r['sous_cat1'], 'cc': r['categorie_craft'],
          'v': r['valeur_objet'], 'tr': 1 if r['echangeable'] else 0, 'q': r.get('qualite_max', 1),
          'w': r['poids']}
@@ -83,6 +110,11 @@ for mid in ids:
         if r['amelioration'] and r['amelioration']['depuis'] in index:
             e['up'] = [index[r['amelioration']['depuis']],
                        [[index[i['id']], i['qte']] for i in r['amelioration']['ingredients'] if i['id'] in index]]
+    if mid in salv:
+        f, rc = salv[mid]
+        if all(i['id'] in index for i in rc['ingredients']):
+            # recyclage : [facteur, quantité produite, [[ingrédient, quantité, non rendu au RRR], ...]]
+            e['sv'] = [f, rc['quantite_produite'], [[index[i['id']], i['qte'], 1 if i['sans_retour'] else 0] for i in rc['ingredients']]]
     items.append(e)
 
 # ---------- Destiny Board : noms FR + bonus par objet (précalculés) ----------

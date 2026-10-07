@@ -163,7 +163,11 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
       <label class="field"><span>Coût du transport (% de la valeur déplacée)</span><input type="number" step="0.5" min="0" id="pf-travel"></label>
     </div>
     <p class="muted small">Le frais exact du Travel Planner n'est pas publié : la valeur par défaut (5 %) est une marge de prudence. Note le frais réel de ton premier trajet et ajuste.</p></div>
-  <div class="card"><h3>Activités à considérer</h3><div class="chips" id="pf-families"></div></div>
+  <div class="card"><h3>Activités à considérer</h3><div class="chips" id="pf-families"></div>
+    <div class="grid" style="margin-top:12px"><label class="field"><span>Recyclage : quantités rendues</span><select id="pf-salvround">
+      <option value="exact">20 % exact (prudent : 0,4 sceau compté 0,4)</option>
+      <option value="ceil">Arrondi supérieur (si constaté en jeu : 0,4 sceau = 1)</option></select></label></div>
+    <p class="muted small">Le recyclage rend 20 % des matières de la recette. L'argent rendu en plus n'est pas compté tant que sa formule n'est pas mesurée.</p></div>
   <div class="card"><h3>Frais de station</h3><p class="muted small">Argent par 100 de nutrition. Vide = 1 000, le maximum autorisé par le jeu : les profits sont alors calculés au pire. Mets le prix réel de ta station pour être plus précis.</p><div class="grid" id="pf-fees"></div></div>
   <div class="card"><h3>Bonus de production du jour</h3><p class="muted small">Annoncé en jeu chaque jour, par ville, sur une catégorie de craft ou de raffinage. Indique le pourcentage et la catégorie : il ne s'applique qu'à elle. Laisse vide s'il n'y en a pas.</p><div class="grid" id="pf-daily"></div></div>
   <div class="card"><h3>Réglages de prudence</h3><div class="grid">

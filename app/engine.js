@@ -12,7 +12,7 @@
 (function (root) {
   'use strict';
 
-  const KIND_LABEL = ['Craft', 'Raffinage', 'Transmutation', 'Amélioration', 'Revente'];
+  const KIND_LABEL = ['Craft', 'Raffinage', 'Transmutation', 'Amélioration', 'Revente', 'Recyclage'];
   const CITIES = ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'];
 
   function createEngine(DATA) {
@@ -232,6 +232,49 @@
       return out;
     }
 
+    /* ---------- Recyclage ---------- */
+    // Acheter un objet recyclable et revendre ce que le recyclage rend : 20 % de chaque ingrédient de la recette
+    // (réglage officiel), × facteur propre à l'objet. L'argent rendu en plus n'est pas compté (formule inconnue).
+    // Arrondi : 'exact' (fraction moyenne, prudent) ou 'ceil' (arrondi supérieur, si constaté en jeu).
+    function salvageUnits(qty, f, amount, prof) {
+      const u = qty * C.salvageResource * f / (amount || 1);
+      return prof.salvageRound === 'ceil' ? Math.ceil(u - 1e-9) : u;
+    }
+    function salvageEval(prices, idx, city, prof) {
+      const item = items[idx];
+      const [f, amount, ings] = item.sv;
+      const buy = acquire(prices, item.id, city, prof);
+      if (buy == null) return null;
+      let revenue = 0; const outputs = [];
+      for (const [ii, qty, noret] of ings) {
+        if (noret) continue;                            // artefacts, cœurs… : non comptés (prudence)
+        const units = salvageUnits(qty, f, amount, prof);
+        if (units <= 0) continue;
+        const b = bestSell(prices, items[ii].id, city, prof);
+        if (!b) continue;
+        revenue += units * b.net;
+        outputs.push({ id: items[ii].id, name: items[ii].n, units, venue: b.venue, net: b.net });
+      }
+      if (!outputs.length) return null;
+      const profit = revenue - buy;
+      return { itemIdx: idx, id: item.id, name: item.n, tier: item.t, ench: item.e, kind: 5, kindLabel: KIND_LABEL[5],
+        city, sellVenue: outputs[0].venue, useFocus: false, amount: 1, rrr: 0, cost: buy, revenue, profit,
+        margin: profit / buy, focus: 0, unitSell: revenue, quality: false, salvage: true, outputs,
+        ingredients: [{ id: item.id, name: item.n, qty: 1, price: buy, city, effQty: 1 }] };
+    }
+    function salvages(prices, prof) {
+      const out = [];
+      const cities = prof.cities && prof.cities.length ? prof.cities : CITIES;
+      items.forEach((item, idx) => {
+        if (!item.tr || !item.sv || !prices[item.id]) return;
+        for (const city of cities) {
+          const o = salvageEval(prices, idx, city, prof);
+          if (o && o.profit > 0 && o.margin >= prof.minMargin) out.push(o);
+        }
+      });
+      return out;
+    }
+
     /* ---------- Garde-fou : prix de vente plafonné au prix moyen payé sur 7 jours ---------- */
     // Un ordre de vente isolé très au-dessus du marché (ou un vieux relevé) ne doit pas créer une fausse opportunité.
     const volN = v => v == null ? 0 : (typeof v === 'object' ? v.n : v);
@@ -243,6 +286,25 @@
       const fees = salesTax(prof) + (prof.mode === 'orders' ? C.setupFee : 0);
       const H = (id, c) => { const h = volumes[id] && volumes[id][c]; return h && typeof h === 'object' ? h : null; };
       for (const o of opps) {
+        if (o.salvage) {
+          // achat : l'objet doit s'échanger dans la ville ; ventes : chaque matière plafonnée à son prix moyen payé
+          const hb = H(o.id, o.city);
+          if (!hb || !(hb.n > 0)) continue;
+          let revenue = 0, capped = false;
+          const outs = [];
+          for (const x of o.outputs) {
+            const h = H(x.id, x.venue);
+            if (!h || !(h.n > 0) || !(h.p > 0)) continue;
+            const f = x.venue === 'Black Market' ? salesTax(prof) : fees;
+            const cap = h.p * (1 - f) * (1 - travelOf(x.venue, o.city, prof));
+            const net = Math.min(x.net, cap); if (net < x.net) capped = true;
+            revenue += x.units * net; outs.push(Object.assign({}, x, { net }));
+          }
+          const profit = revenue - o.cost;
+          if (outs.length && profit > 0 && profit / o.cost >= prof.minMargin)
+            out.push(Object.assign({}, o, { outputs: outs, revenue, unitSell: revenue, profit, margin: profit / o.cost, capped }));
+          continue;
+        }
         // vente
         let best = null;
         const venues = o.flip ? withBM(prof.cities.filter(v => v !== o.city), prof) : sellVenues(o.city, prof);
@@ -289,7 +351,8 @@
     // volumes : { [id]: { [city]: ventes moyennes par jour } }
     function maxCrafts(o, volumes, prof) {
       const vol = (id, c) => volN(volumes[id] && volumes[id][c]);
-      let n = Math.floor(vol(o.id, o.sellVenue) * prof.liqShare / o.amount);
+      let n = o.salvage ? Infinity : Math.floor(vol(o.id, o.sellVenue) * prof.liqShare / o.amount);
+      if (o.salvage) for (const x of o.outputs) n = Math.min(n, Math.floor(vol(x.id, x.venue) * prof.liqShare / x.units));
       for (const l of o.ingredients) {
         if (l.effQty <= 0) continue;
         n = Math.min(n, Math.floor(vol(l.id, l.city || o.city) * prof.liqShare / l.effQty));
@@ -374,7 +437,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, applyHistory, flips, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, applyHistory, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };
