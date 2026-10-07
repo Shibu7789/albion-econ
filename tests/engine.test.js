@@ -254,4 +254,16 @@ t('transport : jamais entre une ville royale et Caerleon ou Brecilien (hors sort
     T5_CLOTH: { Lymhurst: P(650, 600), Caerleon: P(9000, 8000) } }, i5, rec, 1, 'Lymhurst', false, pm);
   assert.strictEqual(o.sellVenue, 'Lymhurst'); assert.ok(o.ingredients.every(g => g.city === 'Lymhurst'));
 });
+t('trajets : chaque ville en plus coûte du temps ; version sur place proposée aussi', () => {
+  const pr = { T5_FIBER: { Lymhurst: P(100, 90), Martlock: P(98, 88) }, T4_CLOTH: { Lymhurst: P(200, 180) },
+    T5_CLOTH: { Lymhurst: P(650, 600) } };
+  const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Martlock'], multiCity: true, travelPct: 0, travelMinutes: 5, minutesPerLine: 5, focus: 0 });
+  const opps = E.opportunities(pr, pm, it => it.id === 'T5_CLOTH').filter(o => o.city === 'Lymhurst');
+  const local = opps.find(o => o.local), multi = opps.find(o => !o.local);
+  assert.ok(local && local.minutes === 5, 'sur place : 5 min');
+  assert.ok(multi && multi.minutes === 10 && multi.trips[0] === 'Martlock', 'avec trajet : 10 min');
+  const vol = { T5_CLOTH: { Lymhurst: 1000 }, T5_FIBER: { Lymhurst: 1e5, Martlock: 1e5 }, T4_CLOTH: { Lymhurst: 1e5 } };
+  const pl = E.plan(opps, vol, Object.assign({}, pm, { capital: 1e6, maxShare: 1, minutes: 45 }));
+  assert.ok(pl.lines[0].local, 'gain minime : la version sur place gagne');
+});
 console.log(n, 'tests OK');

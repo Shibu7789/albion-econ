@@ -264,9 +264,21 @@
       };
     }
 
+    /* ---------- Trajets : villes à visiter en plus de la ville de craft ---------- */
+    function withTrips(o, prof) {
+      const c = new Set();
+      for (const l of o.ingredients) if (l.city && l.city !== o.city && l.city !== 'Île') c.add(l.city);
+      for (const v of (o.outputs ? o.outputs.map(x => x.venue) : [o.sellVenue]))
+        if (v && v !== o.city && !(v === 'Black Market' && o.city === 'Caerleon')) c.add(v);
+      o.trips = [...c];
+      o.minutes = (prof.minutesPerLine || 5) + (prof.travelMinutes != null ? prof.travelMinutes : 5) * c.size;
+      return o;
+    }
+
     /* ---------- Toutes les opportunités ---------- */
     function opportunities(prices, prof, filter) {
       const out = [];
+      const profLocal = Object.assign({}, prof, { multiCity: false });
       const cities = prof.cities && prof.cities.length ? prof.cities : CITIES;
       items.forEach((item, idx) => {
         if (!item.tr) return;
@@ -275,17 +287,23 @@
           if (item.r) {
             for (const rec of item.r) {
               const kind = rec[3];
-              for (const f of kind === 2 ? [false] : [false, true, 'all']) {
-                const o = evaluate(prices, idx, rec, kind, city, f, prof);
-                // une variante au focus inaccessible avec le focus du jour est inutile
-                if (o && f && !(o.focus <= (prof.focus || 0))) continue;
-                if (o && o.profit > 0 && o.margin >= prof.minMargin) out.push(o);
+              // deux versions : tout sur place, et achats/vente répartis entre villes reliées
+              for (const pv of prof.multiCity ? [profLocal, prof] : [profLocal]) {
+                for (const f of kind === 2 ? [false] : [false, true, 'all']) {
+                  const o = evaluate(prices, idx, rec, kind, city, f, pv);
+                  // une variante au focus inaccessible avec le focus du jour est inutile
+                  if (o && f && !(o.focus <= (prof.focus || 0))) continue;
+                  if (!o || !(o.profit > 0) || o.margin < prof.minMargin) continue;
+                  withTrips(o, prof);
+                  if (pv === profLocal) o.local = true; else if (!o.trips.length) continue;   // doublon de la version sur place
+                  out.push(o);
+                }
               }
             }
           }
           if (item.up) {
             const o = evaluateUpgrade(prices, idx, city, prof);
-            if (o && o.profit > 0 && o.margin >= prof.minMargin) out.push(o);
+            if (o && o.profit > 0 && o.margin >= prof.minMargin) out.push(withTrips(o, prof));
           }
         }
       });
@@ -377,6 +395,7 @@
             city, sellVenue: best.venue, useFocus: false, amount: 1, rrr: 0, cost: buy, revenue: best.net, profit,
             margin: profit / buy, focus: 0, unitSell: best.net, quality: item.q > 1, flip: true,
             ingredients: [{ id: item.id, name: item.n, qty: 1, price: buy, city, effQty: 1 }] });
+          withTrips(out[out.length - 1], prof);
         }
       });
       return out;
@@ -419,7 +438,7 @@
         if (!item.tr || !item.sv || !prices[item.id]) return;
         for (const city of cities) {
           const o = salvageEval(prices, idx, city, prof);
-          if (o && o.profit > 0 && o.margin >= prof.minMargin) out.push(o);
+          if (o && o.profit > 0 && o.margin >= prof.minMargin) out.push(withTrips(o, prof));
         }
       });
       return out;
@@ -452,12 +471,13 @@
           }
           const profit = revenue - o.cost;
           if (outs.length && profit > 0 && profit / o.cost >= prof.minMargin)
-            out.push(Object.assign({}, o, { outputs: outs, revenue, unitSell: revenue, profit, margin: profit / o.cost, capped }));
+            out.push(withTrips(Object.assign({}, o, { outputs: outs, revenue, unitSell: revenue, profit, margin: profit / o.cost, capped }), prof));
           continue;
         }
         // vente
         let best = null;
-        const venues = o.flip ? withBM(prof.cities.filter(v => v !== o.city), prof).filter(v => linked(o.city, v, prof)) : sellVenues(o.city, prof);
+        const pv = o.local ? Object.assign({}, prof, { multiCity: false }) : prof;
+        const venues = o.flip ? withBM(prof.cities.filter(v => v !== o.city), prof).filter(v => linked(o.city, v, prof)) : sellVenues(o.city, pv);
         for (const v of venues) {
           const h = H(o.id, v);
           if (!h || !(h.n > 0) || !(h.p > 0)) continue;
@@ -475,7 +495,7 @@
         let cost = o.cost, ok = true;
         const lines = o.ingredients.map(l => {
           let b = null;
-          for (const c of (o.flip ? [o.city] : buyCities(o.city, prof))) {
+          for (const c of (o.flip || o.local ? [o.city] : buyCities(o.city, prof))) {
             const h = H(l.id, c);
             if (!h || !(h.n > 0)) continue;
             const p = acquire(prices, l.id, c, prof);
@@ -491,8 +511,8 @@
         if (!ok) continue;
         const revenue = best.net * o.amount, profit = revenue - cost;
         if (profit > 0 && profit / cost >= prof.minMargin)
-          out.push(Object.assign({}, o, { sellVenue: best.venue, unitSell: best.net, revenue, cost, profit,
-            margin: profit / cost, ingredients: lines, capped: best.capped }));
+          out.push(withTrips(Object.assign({}, o, { sellVenue: best.venue, unitSell: best.net, revenue, cost, profit,
+            margin: profit / cost, ingredients: lines, capped: best.capped }), prof));
       }
       return out;
     }
@@ -536,13 +556,15 @@
       const capCapPlan = prof.capital * prof.maxShare;
       for (const c of cand) {
         const n0 = Math.max(0, Math.min(c.nMax, Math.floor(capCapPlan / c.o.cost)));
-        c.score = n0 > 0 ? (n0 * c.o.profit) / ((n0 * c.o.cost) / Math.max(1, prof.capital) + 1 / slots) : 0;
+        const mins = c.o.minutes || prof.minutesPerLine;
+        c.score = n0 > 0 ? (n0 * c.o.profit) / ((n0 * c.o.cost) / Math.max(1, prof.capital) + mins / Math.max(1, prof.minutes)) : 0;
       }
       const plainCand = cand.filter(c => !c.o.useFocus && c.score > 0).sort((a, b) => b.score - a.score);
       cand.length = 0; cand.push(...focusCand, ...plainCand);
       const chosen = [], usedKey = new Set(), left = {};
       for (const { o, nMax } of cand) {
-        if (minutes < prof.minutesPerLine) break;
+        const lineMin = o.minutes || prof.minutesPerLine;
+        if (minutes < lineMin) continue;
         const key = o.id;   // un objet = une seule ligne, dans sa meilleure ville
         if (usedKey.has(key)) continue;
         let n = nMax;
@@ -561,7 +583,7 @@
         for (const l of o.ingredients) left[l.id + '|' + (l.city || o.city)] -= l.effQty * n;
         chosen.push(line);
         usedKey.add(key);
-        capital -= line.totalCost; focus -= line.totalFocus; minutes -= prof.minutesPerLine;
+        capital -= line.totalCost; focus -= line.totalFocus; minutes -= lineMin;
       }
       const total = chosen.reduce((s, l) => s + l.totalProfit, 0);
       return { lines: chosen, totalProfit: total, capitalUsed: prof.capital - capital, focusUsed: prof.focus - focus,

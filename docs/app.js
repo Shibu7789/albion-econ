@@ -51,7 +51,7 @@
   const DEFAULT_PROFILE = {
     name: 'Principal', premium: false, focus: 0, bank: 0, reserve: 10000000,
     cities: ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'],
-    multiCity: true, travelPct: 0.05, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
+    multiCity: true, travelPct: 0.05, travelMinutes: 5, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
     maxAge: 12, liqShare: 0.15, maxShare: 0.25, minMargin: 0.05, minutes: 45, minutesPerLine: 5,
     minLineProfit: 10000, stationFee: {}, dailyBonus: {}, specs: {},
   };
@@ -203,7 +203,7 @@
           ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
         ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)) / (1 - (l.sellVenue !== l.city && !(bm && l.city === 'Caerleon') ? (p.travelPct || 0) : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
       </ol>
-      <footer><span class="muted">Investissement ${fmtK(l.totalCost)}</span>
+      <footer><span class="muted">Investissement ${fmtK(l.totalCost)} · ${fmt(l.minutes || p.minutesPerLine)} min${l.trips && l.trips.length ? ' dont ' + l.trips.length + ' trajet' + (l.trips.length > 1 ? 's' : '') + ' (' + l.trips.map(esc).join(', ') + ')' : ''}</span>
         ${l.dailyVol ? `<span class="muted">Il s'en vend ${fmt(l.dailyVol)} par jour à ${esc(l.sellVenue)} : ta quantité = ${Math.max(1, Math.round(l.n * l.amount / l.dailyVol * 100))} % d'une journée de ventes</span>` : ''}
         <button class="ghost real" data-start="${i}">Mis en vente</button></footer></article>`;
   }
@@ -274,7 +274,7 @@
     $('#pf-premium').checked = !!p.premium;
     $('#pf-focus').value = p.focus; $('#pf-bank').value = p.bank; $('#pf-reserve').value = p.reserve;
     $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes;
-    $('#pf-multi').checked = !!p.multiCity; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = Math.round((p.travelPct || 0) * 1000) / 10;
+    $('#pf-multi').checked = !!p.multiCity; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = Math.round((p.travelPct || 0) * 1000) / 10;
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
     $('#pf-fees').innerHTML = E.CITIES.map(c => `<label class="field"><span>${c}</span><input type="number" data-fee="${c}" value="${p.stationFee[c] ?? ''}" placeholder="1000"></label>`).join('');
@@ -299,7 +299,8 @@
     updateProf({
       premium: $('#pf-premium').checked, focus: +$('#pf-focus').value || 0, bank: +$('#pf-bank').value || 0,
       reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value,
-      multiCity: $('#pf-multi').checked, salvageRound: $('#pf-salvround').value, travelPct: (+$('#pf-travel').value || 0) / 100, minutes: +$('#pf-minutes').value || 45,
+      multiCity: $('#pf-multi').checked, salvageRound: $('#pf-salvround').value,
+      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, travelPct: (+$('#pf-travel').value || 0) / 100, minutes: +$('#pf-minutes').value || 45,
       cities: $$('#pf-cities input:checked').map(i => i.value), families: $$('#pf-families input:checked').map(i => i.value),
       stationFee: Object.fromEntries($$('[data-fee]').filter(i => i.value !== '').map(i => [i.dataset.fee, +i.value])),
       dailyBonus: Object.fromEntries($$('[data-daily]').filter(i => i.value !== '' && +i.value > 0)
