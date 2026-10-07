@@ -11,8 +11,10 @@ objets = J('objets.json')
 
 # Stations présentes dans les villes royales (les autres : magasins de saison, test, faction, brumes…)
 REAL = re.compile(r'^T\d_(HUNTERSLODGE|FORGE|MAGICITEMS|TOOLMAKER|COOK|ALCHEMIST|CARPENTERSWORKSHOP|SMELTER|TANNERY|WEAVINGMILL|STABLE|STONEMASONRY|BUTCHER|MILL|MELDBUILDING)$')
-EXCL_CAT = {'furniture', 'vanity', 'farming'}
-EXCL_SUB = {('other', 'guilds'), ('other', 'labourers'), ('gathering', 'tracking')}
+EXCL_CAT = {'furniture', 'vanity'}
+# graines, bébés et animaux (achetés au PNJ, module Îles) ; les produits de ferme (pain, beurre, alcool, viande) restent
+EXCL_SUB = {('other', 'guilds'), ('other', 'labourers'), ('gathering', 'tracking'),
+            ('farming', 'farm'), ('farming', 'herbgarden'), ('farming', 'pasture'), ('farming', 'kennel')}
 
 def real_station(r):
     return [s for s in r['stations'] if REAL.match(s)]

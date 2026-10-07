@@ -111,7 +111,7 @@
     }
 
     /* ---------- Chaînes de production : fabriquer un ingrédient au lieu de l'acheter ---------- */
-    // makeCost : coût par unité d'un matériau produit soi-même dans la ville de craft (raffinage, transmutation),
+    // makeCost : coût par unité d'un ingrédient produit soi-même dans la ville de craft (raffinage, transmutation, craft),
     // ses propres ingrédients étant eux-mêmes achetés ou produits (3 niveaux au plus), sans focus (prudent).
     let MEMO = null, MEMO_KEY = null;
     function memo(prices, prof) {
@@ -134,7 +134,7 @@
       let best = null;
       for (const rec of item.r || []) {
         const kind = rec[3];
-        if (kind !== 1 && kind !== 2) continue;           // seulement raffinage et transmutation
+        // raffinage, transmutation et craft d'ingrédients (extraits, sauces, alcool, pain, beurre, viande…)
         const [silver, , amount, , ings] = rec;
         const R = rrr(productionBonus(item, kind, city, false, prof.dailyBonus && prof.dailyBonus[city]));
         let cost = silver || 0; const leaves = [], steps = [];

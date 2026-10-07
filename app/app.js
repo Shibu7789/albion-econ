@@ -193,7 +193,7 @@
         <div class="gain"><b>+${fmtK(l.totalProfit)}</b><span class="muted">marge ${Math.round(l.margin * 100)} %</span></div></header>
       <ol class="steps">
         <li><b>${buyVerb}</b><ul>${ings}</ul></li>
-        ${l.chain && l.chain.length ? `<li><b>Préparer d'abord</b> <span class="muted">moins cher que d'acheter</span><ul>${l.chain.map(st => `<li>${st.kind === 2 ? 'Transmuter' : 'Raffiner'} <span class="q">${fmt(Math.ceil(st.qty * l.n))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span></li>`).join('')}</ul></li>` : ''}
+        ${l.chain && l.chain.length ? `<li><b>Préparer d'abord</b> <span class="muted">moins cher que d'acheter</span><ul>${l.chain.map(st => `<li>${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'} <span class="q">${fmt(Math.ceil(st.qty * l.n))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span></li>`).join('')}</ul></li>` : ''}
         ${l.kind === 5 ? `<li><b>Recycler</b> ${fmt(l.n)} objet${l.n > 1 ? 's' : ''}</li>
           <li><b>Vendre les matières</b><ul>${l.outputs.map(x => `<li><span class="q">${fmt(x.units * l.n)}</span> ${esc(x.name)} <span class="muted">${x.venue !== l.city ? '· <b>' + esc(x.venue) + '</b>' : ''}</span></li>`).join('')}</ul></li>`
           : l.kind === 4 ? `<li><b>Transporter</b> vers ${esc(l.sellVenue === 'Black Market' ? 'le Black Market (Caerleon)' : l.sellVenue)} <span class="muted">Travel Planner</span></li>`
