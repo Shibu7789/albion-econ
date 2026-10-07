@@ -183,6 +183,13 @@
       ${ls.map(([l, i]) => lineHTML(l, i, p)).join('')}</section>`).join('') + bm;
   }
 
+  // Travel Planner : voyage gratuit (temps de trajet) ou téléportation instantanée payée au poids
+  function moveHTML(l, p) {
+    if (l.transport === 'tp') return `<li><b>Téléporter</b> avec la marchandise (Travel Planner) <span class="muted">instantané · frais ≈ ${fmt(l.tpTotal || 0)} argent</span></li>`;
+    if (l.transport === 'voyage') return `<li><b>Voyager</b> avec la marchandise (Travel Planner, gratuit) <span class="muted">≈ ${fmt(p.travelMinutes ?? 5)} min par trajet</span></li>`;
+    return '';
+  }
+
   function lineHTML(l, i, p) {
     const buyVerb = p.mode === 'orders' ? 'Poser un ordre d\'achat' : 'Acheter';
     const bm = l.sellVenue === 'Black Market';
@@ -198,11 +205,12 @@
         ${l.chain && l.chain.length ? `<li><b>Préparer d'abord</b> <span class="muted">moins cher que d'acheter</span><ul>${l.chain.map(st => `<li>${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'}${st.focus ? ' <b>au focus</b>' : ''} <span class="q">${fmt(Math.ceil(st.qty * l.n))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span></li>`).join('')}</ul></li>` : ''}
         ${l.kind === 5 ? `<li><b>Recycler</b> ${fmt(l.n)} objet${l.n > 1 ? 's' : ''}</li>
           <li><b>Vendre les matières</b><ul>${l.outputs.map(x => `<li><span class="q">${fmt(x.units * l.n)}</span> ${esc(x.name)} <span class="muted">${x.venue !== l.city ? '· <b>' + esc(x.venue) + '</b>' : ''}</span></li>`).join('')}</ul></li>`
-          : l.kind === 4 ? `<li><b>Transporter</b> vers ${esc(l.sellVenue === 'Black Market' ? 'le Black Market (Caerleon)' : l.sellVenue)} <span class="muted">Travel Planner ≈ ${fmt(E.tcost(l.id, l.city, l.sellVenue, p) * l.n)} argent</span></li>`
+          : l.kind === 4 ? (l.sellVenue === 'Black Market' ? `<li><b>Transporter</b> vers le Black Market (Caerleon)</li>` : '')
           : l.kind === 3 ? `<li><b>Améliorer</b> ${fmt(l.n)} fois à la station de la pièce</li>`
           : `<li><b>${l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter'}</b> ${fmt(l.n)} fois${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}${l.useFocus === 'all' ? ', toute la chaîne' : ''}</span>` : ''}
           ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
-        ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt((l.unitSell + E.tcost(l.id, l.city, l.sellVenue, p)) / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
+        ${moveHTML(l, p)}
+        ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
       </ol>
       <footer><span class="muted">Investissement ${fmtK(l.totalCost)} · ${fmt(l.minutes || p.minutesPerLine)} min dans ta tournée${l.trips && l.trips.length ? ' · villes : ' + [l.city].concat(l.trips).map(esc).join(', ') : ''}</span>
         ${l.dailyVol ? `<span class="muted">Il s'en vend ${fmt(l.dailyVol)} par jour à ${esc(l.sellVenue)} : ta quantité = ${Math.max(1, Math.round(l.n * l.amount / l.dailyVol * 100))} % d'une journée de ventes</span>` : ''}

@@ -122,18 +122,18 @@ t('frais de station : plafond officiel 1000 si non saisi', () => {
   const o1 = E.evaluate(prices, i5, rec, 1, 'Lymhurst', false, Object.assign({}, prof, { stationFee: {} }));
   near(o1.cost - o0.cost, DATA.items[i5].v * 1 * 0.1125 * 1000 / 100, 1e-6, 'frais');
 });
-t('multi-villes : ingrédient acheté ailleurs avec transport, vente dans la meilleure ville', () => {
+t('multi-villes : ingrédient acheté ailleurs (voyage gratuit), vente dans la meilleure ville', () => {
   const pr = { T5_FIBER: { Lymhurst: P(5000, 4900), Martlock: P(50, 45) }, T4_CLOTH: { Lymhurst: P(200, 180) },
     T5_CLOTH: { Lymhurst: P(650, 600), Martlock: P(90000, 80000) } };
   const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Martlock'], multiCity: true, travelMult: 1 });
   const o = E.evaluate(pr, i5, rec, 1, 'Lymhurst', false, pm);
-  assert.ok(E.tcost('T5_FIBER', 'Martlock', 'Lymhurst', pm) > 0, 'transport payant');
   const fib = o.ingredients.find(g => g.id === 'T5_FIBER');
   assert.strictEqual(fib.city, 'Martlock');
-  const tf = E.tcost('T5_FIBER', 'Martlock', 'Lymhurst', pm), tc = E.tcost('T5_CLOTH', 'Lymhurst', 'Martlock', pm);
-  near(o.cost, (3 * (50 + tf) + 200) / 1.58, 1e-6, 'coût avec transport');
+  near(o.cost, (3 * 50 + 200) / 1.58, 1e-6, 'coût (voyage gratuit)');
   assert.strictEqual(o.sellVenue, 'Martlock');
-  near(o.revenue, 80000 * 0.92 - tc, 1e-6, 'revenu avec transport');
+  near(o.revenue, 80000 * 0.92, 1e-6, 'revenu');
+  const tf = E.tcost('T5_FIBER', 'Martlock', 'Lymhurst', pm), tc = E.tcost('T5_CLOTH', 'Lymhurst', 'Martlock', pm);
+  near(E.tpCost(o, pm), 3 / 1.58 * tf + tc, 1e-6, 'frais de téléportation d\'un cycle');
   const single = E.evaluate(pr, i5, rec, 1, 'Lymhurst', false, Object.assign({}, pm, { multiCity: false }));
   assert.strictEqual(single.ingredients.find(g => g.id === 'T5_FIBER').city, 'Lymhurst');
 });
@@ -163,7 +163,7 @@ t('garde-fou : prix de vente aberrant ramené au prix moyen des 7 jours', () => 
 t('garde-fou multi-villes : une ville au prix aberrant cède la place à une ville au prix normal', () => {
   const pr = { T5_FIBER: { Lymhurst: P(100, 90) }, T4_CLOTH: { Lymhurst: P(200, 180) },
     T5_CLOTH: { Lymhurst: P(650, 600), Martlock: P(99999, 50000) } };
-  const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Martlock'], multiCity: true, travelPct: 0 });
+  const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Martlock'], multiCity: true, travelMult: 1 });
   const o = E.evaluate(pr, i5, rec, 1, 'Lymhurst', false, pm);
   assert.strictEqual(o.sellVenue, 'Martlock');                     // aux prix affichés : la ville aberrante
   const vol = { T5_CLOTH: { Lymhurst: { n: 500, p: 610 }, Martlock: { n: 1, p: 500 } },
@@ -171,13 +171,13 @@ t('garde-fou multi-villes : une ville au prix aberrant cède la place à une vil
   const [c] = E.applyHistory([o], vol, pr, pm);
   assert.strictEqual(c.sellVenue, 'Lymhurst'); near(c.unitSell, 600 * 0.92, 1e-9, 'prix normal');
 });
-t('revente : achat dans une ville, vente directe dans une autre, transport compté', () => {
+t('revente : achat dans une ville, vente directe dans une autre', () => {
   const pr = { T5_CLOTH: { Lymhurst: P(500, 450), Martlock: P(9000, 8000) } };
   const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Martlock'], multiCity: true, travelMult: 1 });
   const f = E.flips(pr, pm, it => it.id === 'T5_CLOTH');
   const o = f.find(x => x.city === 'Lymhurst');
   assert.strictEqual(o.sellVenue, 'Martlock'); near(o.cost, 500, 1e-9, 'achat');
-  near(o.revenue, 8000 * 0.92 - E.tcost('T5_CLOTH', 'Lymhurst', 'Martlock', pm), 1e-9, 'vente nette'); assert.ok(!f.some(x => x.city === 'Martlock'), 'pas de revente perdante');
+  near(o.revenue, 8000 * 0.92, 1e-9, 'vente nette'); assert.ok(!f.some(x => x.city === 'Martlock'), 'pas de revente perdante');
   const vol = { T5_CLOTH: { Lymhurst: { n: 1000, p: 520 }, Martlock: { n: 1000, p: 8500 } } };
   const [c] = E.applyHistory([o], vol, pr, pm);
   assert.strictEqual(c.sellVenue, 'Martlock'); assert.strictEqual(c.ingredients[0].city, 'Lymhurst');
@@ -259,7 +259,7 @@ t('transport : jamais entre une ville royale et Caerleon ou Brecilien (hors sort
 t('trajets : chaque ville en plus coûte du temps ; version sur place proposée aussi', () => {
   const pr = { T5_FIBER: { Lymhurst: P(100, 90), Martlock: P(98, 88) }, T4_CLOTH: { Lymhurst: P(200, 180) },
     T5_CLOTH: { Lymhurst: P(650, 600) } };
-  const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Martlock'], multiCity: true, travelMult: 0, travelMinutes: 5, minutesPerLine: 5, focus: 0 });
+  const pm = Object.assign({}, prof, { cities: ['Lymhurst', 'Martlock'], multiCity: true, travelMult: 0, teleport: false, travelMinutes: 5, minutesPerLine: 5, focus: 0 });
   const opps = E.opportunities(pr, pm, it => it.id === 'T5_CLOTH').filter(o => o.city === 'Lymhurst');
   const local = opps.find(o => o.local), multi = opps.find(o => !o.local);
   assert.ok(local && local.minutes === 5, 'sur place : 5 min');
@@ -273,7 +273,7 @@ t('temps d\'abord : une ligne de 5 min à 140k passe devant une ligne de 20 min 
     ingredients: [], trips });
   const opps = [mk('LONG', 280000, 'Martlock', ['Thetford', 'Lymhurst', 'Fort Sterling']), mk('COURT', 140000, 'Lymhurst', [])];
   const vol = { LONG: { Martlock: 1e4 }, COURT: { Lymhurst: 1e4 } };
-  const pl = E.plan(opps, vol, Object.assign({}, prof, { capital: 1e9, maxShare: 1, liqShare: 0.0001, minutes: 20, minutesPerLine: 5, travelMinutes: 5 }));
+  const pl = E.plan(opps, vol, Object.assign({}, prof, { capital: 1e9, maxShare: 1, liqShare: 0.0001, minutes: 20, minutesPerLine: 5, travelMinutes: 5, teleport: false }));
   assert.strictEqual(pl.lines[0].id, 'COURT');
   near(pl.lines[0].minutes, 5, 1e-9, 'sur place');
 });
@@ -281,7 +281,7 @@ t('tournée : une ville déjà visitée ne coûte plus de trajet', () => {
   const mk = (id, city, trips) => ({ id, city, useFocus: false, profit: 100000, focus: 0, cost: 1000, amount: 1, sellVenue: city, ingredients: [], trips });
   const opps = [mk('A', 'Lymhurst', []), mk('B', 'Martlock', []), mk('C', 'Lymhurst', ['Martlock'])];
   const vol = { A: { Lymhurst: 1e4 }, B: { Martlock: 1e4 }, C: { Lymhurst: 1e4 } };
-  const pl = E.plan(opps, vol, Object.assign({}, prof, { capital: 1e9, maxShare: 1, liqShare: 0.0001, minutes: 100, minutesPerLine: 5, travelMinutes: 5 }));
+  const pl = E.plan(opps, vol, Object.assign({}, prof, { capital: 1e9, maxShare: 1, liqShare: 0.0001, minutes: 100, minutesPerLine: 5, travelMinutes: 5, teleport: false }));
   const mins = pl.lines.reduce((s, l) => s + l.minutes, 0);
   near(mins, 5 + 10 + 5, 1e-9, 'Lymhurst gratuit, Martlock une fois, C sans trajet en plus');
 });
@@ -292,5 +292,20 @@ t('Travel Planner : poids × facteur × 150, ×2 entre villes non voisines', () 
   assert.strictEqual(E.tcost('T8_METALBAR', 'Thetford', 'Fort Sterling', prof), one, 'voisines');
   assert.strictEqual(E.tcost('T8_METALBAR', 'Thetford', 'Lymhurst', prof), 2 * one, 'non voisines');
   assert.strictEqual(E.tcost('T8_METALBAR', 'Caerleon', 'Caerleon', prof), 0);
+});
+t('Travel Planner : voyage gratuit (temps) ou téléportation (frais au poids), le plus rentable par minute', () => {
+  const it = DATA.items[E.index.get('T8_METALBAR')];
+  const fee = Math.ceil(it.w * it.ft * 150);                                   // Thetford → Fort Sterling, voisines
+  const mk = (profit) => ({ id: 'T8_METALBAR', city: 'Thetford', useFocus: false, profit, focus: 0, cost: 1000, amount: 1,
+    sellVenue: 'Fort Sterling', ingredients: [], trips: ['Fort Sterling'] });
+  const vol = { T8_METALBAR: { 'Fort Sterling': 1e4 } };
+  const base = Object.assign({}, prof, { capital: 1e9, maxShare: 1, liqShare: 0.001, minutes: 100, minutesPerLine: 5, travelMinutes: 5, minLineProfit: 0 });
+  const big = E.plan([mk(fee * 10)], vol, base).lines[0];                      // frais faibles : téléporter (5 min au lieu de 10)
+  assert.strictEqual(big.transport, 'tp'); near(big.minutes, 5, 1e-9); near(big.totalProfit, 10 * (fee * 10 - fee), 1e-6, 'frais déduits');
+  const thin = E.plan([mk(fee * 1.5)], vol, base).lines[0];                    // frais qui mangent la marge : voyager
+  assert.strictEqual(thin.transport, 'voyage'); near(thin.minutes, 10, 1e-9, 'un trajet');
+  near(thin.totalProfit, 10 * fee * 1.5, 1e-6, 'voyage sans frais');
+  const no = E.plan([mk(fee * 10)], vol, Object.assign({}, base, { teleport: false })).lines[0];
+  assert.strictEqual(no.transport, 'voyage');
 });
 console.log(n, 'tests OK');

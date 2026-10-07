@@ -7,7 +7,7 @@
 | 2026-10-07 | Outil hébergé sur GitHub Pages ; prix lus dans le navigateur (API inaccessible depuis le cloud et depuis une page hébergée par Claude) | Clos |
 | 2026-10-07 | Profil du joueur (spés, capital, résultats) stocké dans son navigateur, jamais dans le dépôt public | Clos |
 | 2026-10-07 | Profit calculé sur la qualité Normale ; le bonus de qualité est affiché à part | Clos |
-| 2026-10-07 | Achat et vente dans toutes les villes : transport uniquement entre les 5 villes royales (Travel Planner) ; Caerleon et Brecilien sur place seulement ; coût du Travel Planner = ceil(poids × fasttravelfactor × 150 × multiplicateur serveur) × distance (1 villes voisines, 2 sinon), multiplicateur à calibrer par une lecture en jeu ; 5 min par trajet (estimation du joueur) | Clos |
+| 2026-10-07 | Achat et vente dans toutes les villes : transport uniquement entre les 5 villes royales (Travel Planner) ; Caerleon et Brecilien sur place seulement ; Travel Planner : voyage gratuit d'environ 5 min par trajet, ou téléportation instantanée payée au poids (donnée du joueur) ; frais de téléportation = ceil(poids × fasttravelfactor × 150 × multiplicateur serveur) × distance, multiplicateur à calibrer ; le planificateur garde le mode le plus rentable par minute | Clos |
 | 2026-10-07 | Black Market : hors liste du jour, liste séparée pour une sortie hebdomadaire en groupe (trajet risqué) | Clos |
 | 2026-10-07 | Frais de station par défaut = plafond officiel (maxuseagefee 1000) | Clos |
 | 2026-10-07 | Ventes suivies en deux temps (mis en vente, vendu) : délai de vente mesuré, pas supposé | Clos |

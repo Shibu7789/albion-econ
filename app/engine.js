@@ -98,9 +98,12 @@
     function sellVenues(craftCity, prof) {
       return withBM(prof.multiCity ? prof.cities.slice() : [craftCity], prof).filter(v => linked(craftCity, v, prof));
     }
-    // Coût du Travel Planner par unité transportée (formule publiée par Albion Free Market, attributs officiels) :
-    // arrondi_sup(poids × facteur de voyage × 150 × multiplicateur serveur) × distance
-    // distance = 1 entre villes royales voisines, 2 sinon. Multiplicateur serveur : inconnu pour l'Europe (profil, défaut 1).
+    // Travel Planner, deux modes (donnée du joueur) :
+    //  - Voyage : gratuit, environ travelMinutes par trajet ;
+    //  - Téléportation : instantanée, payée selon le poids transporté. Coût par unité (formule publiée par
+    //    Albion Free Market, attributs officiels) : arrondi_sup(poids × facteur de voyage × 150 × multiplicateur serveur)
+    //    × distance (1 entre villes royales voisines, 2 sinon). Multiplicateur Europe inconnu (profil, défaut 1).
+    // Le choix des villes se fait sans frais (voyage) ; le planificateur compare ensuite voyage et téléportation.
     const ADJ = new Set(['Thetford|Fort Sterling', 'Fort Sterling|Lymhurst', 'Lymhurst|Bridgewatch', 'Bridgewatch|Martlock', 'Martlock|Thetford']);
     function tcost(id, a, b, prof) {
       if (!a || !b || a === b || a === 'Île' || b === 'Île') return 0;
@@ -115,7 +118,7 @@
       for (const c of buyCities(craftCity, prof)) {
         const p = acquire(prices, id, c, prof);
         if (p == null) continue;
-        const eff = p + tcost(id, c, craftCity, prof);
+        const eff = p;
         if (!best || eff < best.price) best = { price: eff, city: c, raw: p };
       }
       return best;
@@ -125,7 +128,7 @@
       for (const v of sellVenues(craftCity, prof)) {
         const n = dispose(prices, id, v, prof);
         if (n == null) continue;
-        const eff = n - tcost(id, craftCity, v, prof);
+        const eff = n;
         if (!best || eff > best.net) best = { venue: v, net: eff };
       }
       return best;
@@ -286,6 +289,18 @@
       return o;
     }
 
+    // Frais de téléportation d'un cycle (une fabrication / un achat-revente) : ingrédients amenés vers la ville
+    // de craft + production envoyée vers la ville de vente. null si un trajet ne passe pas par le Travel Planner.
+    function tpCost(o, prof) {
+      const legs = [];
+      for (const l of o.ingredients) if (l.city && l.city !== o.city && l.city !== 'Île' && l.effQty > 0) legs.push([l.id, l.city, o.city, l.effQty]);
+      if (o.outputs) { for (const x of o.outputs) if (x.venue !== o.city) legs.push([x.id, o.city, x.venue, x.units]); }
+      else if (o.sellVenue && o.sellVenue !== o.city) legs.push([o.id, o.city, o.sellVenue, o.amount]);
+      let c = 0;
+      for (const [id, a, b, q] of legs) { if (!(ROYAL.has(a) && ROYAL.has(b))) return null; c += q * tcost(id, a, b, prof); }
+      return c;
+    }
+
     /* ---------- Toutes les opportunités ---------- */
     function opportunities(prices, prof, filter) {
       const out = [];
@@ -396,7 +411,7 @@
           for (const v of withBM(cities.filter(c => c !== city), prof).filter(v => linked(city, v, prof))) {
             const n = dispose(prices, item.id, v, Object.assign({}, prof));
             if (n == null) continue;
-            const net = n - tcost(item.id, city, v, prof);
+            const net = n;
             if (!best || net > best.net) best = { venue: v, net };
           }
           if (!best) continue;
@@ -476,7 +491,7 @@
             const h = H(x.id, x.venue);
             if (!h || !(h.n > 0) || !(h.p > 0)) continue;
             const f = x.venue === 'Black Market' ? salesTax(prof) : fees;
-            const cap = h.p * (1 - f) - tcost(x.id, o.city, x.venue, prof);
+            const cap = h.p * (1 - f);
             const net = Math.min(x.net, cap); if (net < x.net) capped = true;
             revenue += x.units * net; outs.push(Object.assign({}, x, { net }));
           }
@@ -495,7 +510,7 @@
           const cur = dispose(prices, o.id, v, prof);
           if (cur == null) continue;
           const f = v === 'Black Market' ? salesTax(prof) : fees;
-          const net = Math.min(cur, h.p * (1 - f)) - tcost(o.id, o.city, v, prof);
+          const net = Math.min(cur, h.p * (1 - f));
           if (!best || net > best.net) best = { venue: v, net, capped: cur > h.p * (1 - f) };
         }
         if (!best) continue;
@@ -510,11 +525,11 @@
             if (!h || !(h.n > 0)) continue;
             const p = acquire(prices, l.id, c, prof);
             if (p == null) continue;
-            const eff = p + tcost(l.id, c, o.city, prof);
+            const eff = p;
             if (!b || eff < b.eff) b = { eff, raw: p, city: c };
           }
           if (!b) { ok = false; return l; }
-          const prevEff = l.price + tcost(l.id, l.city || o.city, o.city, prof);
+          const prevEff = l.price;
           cost += l.effQty * (b.eff - prevEff);
           return Object.assign({}, l, { price: b.raw, city: b.city });
         });
@@ -556,7 +571,12 @@
         const nMax = maxCrafts(o, volumes, prof);
         if (nMax <= 0) continue;
         if (!byItem.has(o.id)) byItem.set(o.id, []);
-        byItem.get(o.id).push({ o, nMax });
+        byItem.get(o.id).push({ o: Object.assign({}, o, { transport: o.trips && o.trips.length ? 'voyage' : null }), nMax });
+        // même opération en se téléportant : instantané, frais selon le poids
+        const tp = prof.teleport !== false && o.trips && o.trips.length ? tpCost(o, prof) : null;
+        if (tp != null && o.profit - tp > 0)
+          byItem.get(o.id).push({ o: Object.assign({}, o, { transport: 'tp', tpUnit: tp, cost: o.cost + tp, profit: o.profit - tp,
+            margin: (o.profit - tp) / (o.cost + tp) }), nMax });
       }
       const chosen = [], left = {}, visited = new Set();
       const leftOf = (id, c) => { const k = id + '|' + c; if (!(k in left)) left[k] = volN(volumes[id] && volumes[id][c]) * prof.liqShare; return k; };
@@ -571,6 +591,7 @@
         return Math.max(0, n);
       }
       function minutesOf(o) {
+        if (o.transport === 'tp') return prof.minutesPerLine || 5;   // téléportation : pas de trajet à faire
         const need = new Set([o.city, ...(o.trips || [])]);
         let fresh = 0; for (const c of need) if (!visited.has(c)) fresh++;
         if (!visited.size) fresh = Math.max(0, fresh - 1);           // la première ville de la session est gratuite
@@ -593,7 +614,7 @@
         if (!pick) break;
         const { o, n, mins } = pick;
         for (const l of o.ingredients) if (l.city !== 'Île') left[leftOf(l.id, l.city || o.city)] -= l.effQty * n;
-        chosen.push(Object.assign({}, o, { n, totalCost: n * o.cost, totalProfit: n * o.profit, totalFocus: n * o.focus,
+        chosen.push(Object.assign({}, o, { n, tpTotal: (o.tpUnit || 0) * n, totalCost: n * o.cost, totalProfit: n * o.profit, totalFocus: n * o.focus,
           minutes: mins, perMinute: n * o.profit / mins }));
         visited.add(o.city); (o.trips || []).forEach(c => visited.add(c));
         capital -= n * o.cost; focus -= n * o.focus; minutes -= mins;
@@ -623,7 +644,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, applyHistory, tcost, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, applyHistory, tcost, tpCost, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };
