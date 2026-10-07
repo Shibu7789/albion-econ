@@ -140,4 +140,13 @@ t('bonus du jour : seulement sur sa catégorie', () => {
   near(E.productionBonus(it, 1, 'Lymhurst', false, { pct: 0.1, cat: 'fiber' }), 0.68, 1e-9, 'tissu bonifié');
   near(E.productionBonus(it, 1, 'Lymhurst', false, { pct: 0.1, cat: 'ore' }), 0.58, 1e-9, 'autre catégorie');
 });
+t('planificateur : le focus va à la meilleure rentabilité par point', () => {
+  const mk = (id, profit, focus, f) => ({ id, city: 'X', useFocus: f, profit, focus, cost: 100, amount: 1, sellVenue: 'X', ingredients: [] });
+  const opps = [mk('A', 1000, 0, false), mk('A', 1100, 1000, true),   // +100 pour 1000 focus
+                mk('B', 500, 0, false), mk('B', 900, 100, true)];    // +400 pour 100 focus
+  const vol = { A: { X: 1000 }, B: { X: 1000 } };
+  const pl = E.plan(opps, vol, Object.assign({}, prof, { focus: 1000, capital: 1e9, maxShare: 1, liqShare: 0.01 }));
+  const b = pl.lines.find(l => l.id === 'B'); const a = pl.lines.find(l => l.id === 'A');
+  assert.ok(b.useFocus, 'B au focus'); assert.ok(!a.useFocus, 'A sans focus (focus épuisé par B)');
+});
 console.log(n, 'tests OK');

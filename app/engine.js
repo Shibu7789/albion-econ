@@ -222,7 +222,17 @@
         if (n <= 0) continue;
         cand.push({ o, nMax: n });
       }
-      cand.sort((a, b) => b.o.profit * b.nMax - a.o.profit * a.nMax);
+      // Le focus va d'abord là où il rapporte le plus PAR POINT, en gain par rapport à la même recette sans focus ;
+      // ensuite le reste du temps et du capital va aux lignes sans focus les plus rentables.
+      const noFocus = {};
+      for (const c of cand) if (!c.o.useFocus) {
+        const k = c.o.id + '|' + c.o.city;
+        noFocus[k] = Math.max(noFocus[k] || 0, c.o.profit);
+      }
+      for (const c of cand) c.perFocus = c.o.useFocus ? (c.o.profit - (noFocus[c.o.id + '|' + c.o.city] || 0)) / c.o.focus : 0;
+      const focusCand = cand.filter(c => c.o.useFocus && c.perFocus > 0).sort((a, b) => b.perFocus - a.perFocus);
+      const plainCand = cand.filter(c => !c.o.useFocus).sort((a, b) => b.o.profit * b.nMax - a.o.profit * a.nMax);
+      cand.length = 0; cand.push(...focusCand, ...plainCand);
       const chosen = [], usedKey = new Set(), left = {};
       for (const { o, nMax } of cand) {
         if (minutes < prof.minutesPerLine) break;
