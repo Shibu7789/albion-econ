@@ -266,4 +266,21 @@ t('trajets : chaque ville en plus coûte du temps ; version sur place proposée 
   const pl = E.plan(opps, vol, Object.assign({}, pm, { capital: 1e6, maxShare: 1, minutes: 45 }));
   assert.ok(pl.lines[0].local, 'gain minime : la version sur place gagne');
 });
+t('temps d\'abord : une ligne de 5 min à 140k passe devant une ligne de 20 min à 280k', () => {
+  const mk = (id, profit, city, trips) => ({ id, city, useFocus: false, profit, focus: 0, cost: 1000, amount: 1, sellVenue: city,
+    ingredients: [], trips });
+  const opps = [mk('LONG', 280000, 'Martlock', ['Thetford', 'Lymhurst', 'Fort Sterling']), mk('COURT', 140000, 'Lymhurst', [])];
+  const vol = { LONG: { Martlock: 1e4 }, COURT: { Lymhurst: 1e4 } };
+  const pl = E.plan(opps, vol, Object.assign({}, prof, { capital: 1e9, maxShare: 1, liqShare: 0.0001, minutes: 20, minutesPerLine: 5, travelMinutes: 5 }));
+  assert.strictEqual(pl.lines[0].id, 'COURT');
+  near(pl.lines[0].minutes, 5, 1e-9, 'sur place');
+});
+t('tournée : une ville déjà visitée ne coûte plus de trajet', () => {
+  const mk = (id, city, trips) => ({ id, city, useFocus: false, profit: 100000, focus: 0, cost: 1000, amount: 1, sellVenue: city, ingredients: [], trips });
+  const opps = [mk('A', 'Lymhurst', []), mk('B', 'Martlock', []), mk('C', 'Lymhurst', ['Martlock'])];
+  const vol = { A: { Lymhurst: 1e4 }, B: { Martlock: 1e4 }, C: { Lymhurst: 1e4 } };
+  const pl = E.plan(opps, vol, Object.assign({}, prof, { capital: 1e9, maxShare: 1, liqShare: 0.0001, minutes: 100, minutesPerLine: 5, travelMinutes: 5 }));
+  const mins = pl.lines.reduce((s, l) => s + l.minutes, 0);
+  near(mins, 5 + 10 + 5, 1e-9, 'Lymhurst gratuit, Martlock une fois, C sans trajet en plus');
+});
 console.log(n, 'tests OK');

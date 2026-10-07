@@ -532,62 +532,66 @@
 
     /* ---------- Planificateur ---------- */
     // Choisit les lignes du jour sous contraintes : capital, focus, temps, diversification.
+    // Planificateur : la session se construit ligne par ligne, comme une tournée.
+    //  - temps d'une ligne = temps de base + un trajet par ville PAS ENCORE visitée dans la session ;
+    //  - pour chaque objet, la meilleure version faisable (sur place / multi-villes, avec ou sans focus) ;
+    //  - classement par profit rapporté à la ressource la plus consommée (temps ou capital) : quand le temps
+    //    limite, c'est l'argent par minute qui décide ; le focus n'est qu'une limite (il se recharge chaque jour).
     function plan(opps, volumes, prof) {
       let capital = prof.capital, focus = prof.focus, minutes = prof.minutes;
       const capCap = prof.capital * prof.maxShare;
-      const cand = [];
+      const travel = prof.travelMinutes != null ? prof.travelMinutes : 5;
+      const byItem = new Map();
       for (const o of opps) {
-        const n = maxCrafts(o, volumes, prof);
-        if (n <= 0) continue;
-        cand.push({ o, nMax: n });
+        const nMax = maxCrafts(o, volumes, prof);
+        if (nMax <= 0) continue;
+        if (!byItem.has(o.id)) byItem.set(o.id, []);
+        byItem.get(o.id).push({ o, nMax });
       }
-      // Le focus va d'abord là où il rapporte le plus PAR POINT, en gain par rapport à la même recette sans focus ;
-      // ensuite le reste du temps et du capital va aux lignes sans focus les plus rentables.
-      const noFocus = {};
-      for (const c of cand) if (!c.o.useFocus) {
-        const k = c.o.id + '|' + c.o.city;
-        noFocus[k] = Math.max(noFocus[k] || 0, c.o.profit);
-      }
-      for (const c of cand) c.perFocus = c.o.useFocus ? (c.o.profit - (noFocus[c.o.id + '|' + c.o.city] || 0)) / c.o.focus : 0;
-      const focusCand = cand.filter(c => c.o.useFocus && c.perFocus > 0).sort((a, b) => b.perFocus - a.perFocus);
-      // Lignes sans focus : classées par profit rapporté à la part de capital ET de temps de session qu'elles consomment.
-      // Avec peu de capital, une ligne qui rapporte beaucoup par argent investi passe devant une grosse ligne gourmande.
-      const slots = Math.max(1, Math.floor(prof.minutes / prof.minutesPerLine));
-      const capCapPlan = prof.capital * prof.maxShare;
-      for (const c of cand) {
-        const n0 = Math.max(0, Math.min(c.nMax, Math.floor(capCapPlan / c.o.cost)));
-        const mins = c.o.minutes || prof.minutesPerLine;
-        c.score = n0 > 0 ? (n0 * c.o.profit) / ((n0 * c.o.cost) / Math.max(1, prof.capital) + mins / Math.max(1, prof.minutes)) : 0;
-      }
-      const plainCand = cand.filter(c => !c.o.useFocus && c.score > 0).sort((a, b) => b.score - a.score);
-      cand.length = 0; cand.push(...focusCand, ...plainCand);
-      const chosen = [], usedKey = new Set(), left = {};
-      for (const { o, nMax } of cand) {
-        const lineMin = o.minutes || prof.minutesPerLine;
-        if (minutes < lineMin) continue;
-        const key = o.id;   // un objet = une seule ligne, dans sa meilleure ville
-        if (usedKey.has(key)) continue;
+      const chosen = [], left = {}, visited = new Set();
+      const leftOf = (id, c) => { const k = id + '|' + c; if (!(k in left)) left[k] = volN(volumes[id] && volumes[id][c]) * prof.liqShare; return k; };
+      function size(o, nMax) {
         let n = nMax;
-        // les ingrédients partagés entre plusieurs lignes se partagent aussi le volume du marché
         for (const l of o.ingredients) {
-          if (l.effQty <= 0) continue;
-          const bc = l.city || o.city, k = l.id + '|' + bc;
-          if (!(k in left)) left[k] = volN(volumes[l.id] && volumes[l.id][bc]) * prof.liqShare;
-          n = Math.min(n, Math.floor(left[k] / l.effQty));
+          if (l.effQty <= 0 || l.city === 'Île') continue;
+          n = Math.min(n, Math.floor(left[leftOf(l.id, l.city || o.city)] / l.effQty));
         }
         n = Math.min(n, Math.floor(Math.min(capital, capCap) / o.cost));
         if (o.useFocus) n = Math.min(n, o.focus > 0 ? Math.floor(focus / o.focus) : n);
-        if (n <= 0) continue;
-        const line = Object.assign({}, o, { n, totalCost: n * o.cost, totalProfit: n * o.profit, totalFocus: n * o.focus });
-        if (line.totalProfit < prof.minLineProfit) continue;
-        for (const l of o.ingredients) left[l.id + '|' + (l.city || o.city)] -= l.effQty * n;
-        chosen.push(line);
-        usedKey.add(key);
-        capital -= line.totalCost; focus -= line.totalFocus; minutes -= lineMin;
+        return Math.max(0, n);
+      }
+      function minutesOf(o) {
+        const need = new Set([o.city, ...(o.trips || [])]);
+        let fresh = 0; for (const c of need) if (!visited.has(c)) fresh++;
+        if (!visited.size) fresh = Math.max(0, fresh - 1);           // la première ville de la session est gratuite
+        return (prof.minutesPerLine || 5) + travel * fresh;
+      }
+      for (;;) {
+        let pick = null;
+        for (const [id, vars] of byItem) {
+          let bestV = null;
+          for (const { o, nMax } of vars) {
+            const n = size(o, nMax); if (n <= 0) continue;
+            const P = n * o.profit; if (P < prof.minLineProfit) continue;
+            const mins = minutesOf(o); if (mins > minutes) continue;
+            const score = P / Math.max(mins / Math.max(1, prof.minutes), (n * o.cost) / Math.max(1, prof.capital));
+            if (!bestV || score > bestV.score) bestV = { o, n, P, mins, score };
+          }
+          if (!bestV) continue;
+          if (!pick || bestV.score > pick.score) pick = Object.assign(bestV, { id });
+        }
+        if (!pick) break;
+        const { o, n, mins } = pick;
+        for (const l of o.ingredients) if (l.city !== 'Île') left[leftOf(l.id, l.city || o.city)] -= l.effQty * n;
+        chosen.push(Object.assign({}, o, { n, totalCost: n * o.cost, totalProfit: n * o.profit, totalFocus: n * o.focus,
+          minutes: mins, perMinute: n * o.profit / mins }));
+        visited.add(o.city); (o.trips || []).forEach(c => visited.add(c));
+        capital -= n * o.cost; focus -= n * o.focus; minutes -= mins;
+        byItem.delete(pick.id);
       }
       const total = chosen.reduce((s, l) => s + l.totalProfit, 0);
       return { lines: chosen, totalProfit: total, capitalUsed: prof.capital - capital, focusUsed: prof.focus - focus,
-               minutesUsed: prof.minutes - minutes };
+               minutesUsed: prof.minutes - minutes, route: [...visited] };
     }
 
     /* ---------- Travailleurs ---------- */

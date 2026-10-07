@@ -170,6 +170,7 @@
     $('#k-capital-of').textContent = 'sur ' + fmtK(pl.capitalAvail) + ' disponibles';
     $('#k-focus').textContent = fmt(pl.focusUsed);
     $('#k-time').textContent = fmt(pl.minutesUsed) + ' min';
+    $('#k-route').textContent = pl.route && pl.route.length ? 'Tournée : ' + pl.route.join(' → ') + ' · ' + fmtK(pl.totalProfit / Math.max(1, pl.minutesUsed)) + ' par minute' : '';
     $('#k-at').textContent = new Date(pl.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
     const byCity = {};
     pl.lines.forEach((l, i) => { const g = (l.flip ? 'Revente — acheter à ' : l.salvage ? 'Recyclage — acheter à ' : 'Crafter à ') + l.city; (byCity[g] = byCity[g] || []).push([l, i]); });
@@ -191,7 +192,7 @@
     return `<article class="line" data-i="${i}">
       <header><label class="chk"><input type="checkbox" id="done-${i}"> <span class="kind">${esc(l.kindLabel)}</span></label>
         <h4>${esc(l.name)} <span class="tier">T${l.tier}${ench}</span></h4>
-        <div class="gain"><b>+${fmtK(l.totalProfit)}</b><span class="muted">marge ${Math.round(l.margin * 100)} %</span></div></header>
+        <div class="gain"><b>+${fmtK(l.totalProfit)}</b><span class="muted">${l.perMinute ? fmtK(l.perMinute) + ' / min · ' : ''}marge ${Math.round(l.margin * 100)} %</span></div></header>
       <ol class="steps">
         <li><b>${buyVerb}</b><ul>${ings}</ul></li>
         ${l.chain && l.chain.length ? `<li><b>Préparer d'abord</b> <span class="muted">moins cher que d'acheter</span><ul>${l.chain.map(st => `<li>${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'}${st.focus ? ' <b>au focus</b>' : ''} <span class="q">${fmt(Math.ceil(st.qty * l.n))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span></li>`).join('')}</ul></li>` : ''}
@@ -203,7 +204,7 @@
           ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
         ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)) / (1 - (l.sellVenue !== l.city && !(bm && l.city === 'Caerleon') ? (p.travelPct || 0) : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
       </ol>
-      <footer><span class="muted">Investissement ${fmtK(l.totalCost)} · ${fmt(l.minutes || p.minutesPerLine)} min${l.trips && l.trips.length ? ' dont ' + l.trips.length + ' trajet' + (l.trips.length > 1 ? 's' : '') + ' (' + l.trips.map(esc).join(', ') + ')' : ''}</span>
+      <footer><span class="muted">Investissement ${fmtK(l.totalCost)} · ${fmt(l.minutes || p.minutesPerLine)} min dans ta tournée${l.trips && l.trips.length ? ' · villes : ' + [l.city].concat(l.trips).map(esc).join(', ') : ''}</span>
         ${l.dailyVol ? `<span class="muted">Il s'en vend ${fmt(l.dailyVol)} par jour à ${esc(l.sellVenue)} : ta quantité = ${Math.max(1, Math.round(l.n * l.amount / l.dailyVol * 100))} % d'une journée de ventes</span>` : ''}
         <button class="ghost real" data-start="${i}">Mis en vente</button></footer></article>`;
   }
