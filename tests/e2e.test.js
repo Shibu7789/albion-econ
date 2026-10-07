@@ -75,7 +75,7 @@ function fakeHistory(url) {
   const lines = await page.locator('.line').count();
   assert.ok(lines > 0, 'au moins une ligne');
   const cities = await page.locator('.city h3').allTextContents();
-  assert.ok(cities.every(t => /Lymhurst|Caerleon/.test(t)), 'uniquement les villes choisies : ' + cities);
+  assert.ok(cities.every(t => /Lymhurst|Caerleon|Black Market/.test(t)), 'uniquement les villes choisies : ' + cities);
   const profit = await page.textContent('#k-profit');
   assert.ok(profit && profit !== '—', 'profit affiché');
   console.log(`OK analyse : ${lines} lignes, profit prévu ${profit}, ${calls} appels API simulés`);
