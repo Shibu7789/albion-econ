@@ -52,7 +52,7 @@
     name: 'Principal', premium: false, focus: 0, bank: 0, reserve: 10000000,
     cities: ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'],
     multiCity: true, riskyOuting: false, travelMult: 1, travelMinutes: 5, mode: 'mixed', goalPerDay: 5000000, progressShare: 0.05, families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
-    maxAge: 12, liqShare: 0.15, maxShare: 0.25, minMargin: 0.05, minutes: 45, minutesPerLine: 5,
+    maxAge: 12, maxAgeBuy: 4, liqShare: 0.15, maxShare: 0.25, minMargin: 0.05, minutes: 45, minutesPerLine: 5,
     minLineProfit: 10000, stationFee: {}, dailyBonus: {}, specs: {},
   };
   let profiles = store.get('ae.profiles', null);
@@ -263,6 +263,11 @@
   const JTYPE = { WARRIOR: 'Guerrier (forgeron)', HUNTER: 'Chasseur (archer-fabricant)', MAGE: 'Mage (enchanteur)', TOOLMAKER: 'Outilleur' };
   const journalName = id => { const m = /^T(\d)_JOURNAL_(\w+)$/.exec(id); return m ? `journal ${JTYPE[m[2]] || m[2]} T${m[1]}` : id; };
   const journalTxt = l => l.journal ? `prends <b>${fmt(Math.ceil(l.journal.share * l.n))}</b> ${journalName(l.journal.id)} vide${l.journal.share * l.n > 1 ? 's' : ''} (≈ ${fmt(l.journal.empty)}) et revends-les pleins (≈ ${fmt(l.journal.full)}) : +${fmtK(l.journal.value * l.n)}` : '';
+  // Sans focus le retour de ressources est plus faible : avec les mêmes achats on fait moins de crafts
+  const noFocusCrafts = (l, p) => { if (!l.useFocus || !(l.rrr < 1)) return null;
+    const it = DATA.items[l.itemIdx]; const r0 = E.rrr(E.productionBonus(it, l.kind, l.city, false, engineProfile(p).dailyBonus));
+    return Math.floor(l.n * (1 - l.rrr) / (1 - r0)); };
+  const focusWarn = (l, p) => { const k = noFocusCrafts(l, p); return k != null && k < l.n ? `<br><span class="neg small">Active bien le focus : sans focus, ces achats ne suffisent que pour ≈ ${fmt(k)} crafts sur ${fmt(l.n)}.</span>` : ''; };
   const signK = v => (v >= 0 ? '+' : '−') + fmtK(Math.abs(v));
   const sellPrice = (l, p) => l.unitSell / (1 - E.salesTax(p) - (E.sellByOrder(p) && l.sellVenue !== 'Black Market' ? DATA.consts.setupFee : 0));
   const ORDER = { buy: 0, make: 1, salvage: 1, sell: 2 };
@@ -278,7 +283,7 @@
       if (a.type === 'make') {
         const pre = l.chain && l.chain.length ? l.chain.map(st => `${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'} <span class="q">${fmt(Math.ceil(st.qty * l.n + (st.start || 0) - 1e-9))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span>${st.focus ? ' au focus' : ''}`).join(', puis ') + ', puis ' : '';
         const verb = l.kind === 3 ? 'Améliorer' : l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter';
-        return `<li>${pre ? '<span class="muted">' + pre + '</span>' : ''}<b>${verb}</b> <span class="q">${fmt(l.n)}</span> × ${name(l)}${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}${l.prog ? ` <span class="muted">· sans focus, monte ${esc(l.levels[0].name)}</span>` : ''}${l.journal ? `<br><span class="muted">Journaux : ${journalTxt(l)}</span>` : ''}</li>`;
+        return `<li>${pre ? '<span class="muted">' + pre + '</span>' : ''}<b>${verb}</b> <span class="q">${fmt(l.n)}</span> × ${name(l)}${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}${l.prog ? ` <span class="muted">· sans focus, monte ${esc(l.levels[0].name)}</span>` : ''}${l.journal ? `<br><span class="muted">Journaux : ${journalTxt(l)}</span>` : ''}${focusWarn(l, p)}</li>`;
       }
       const bm = a.city === 'Black Market';
       const verb = E.sellByOrder(p) && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
@@ -291,14 +296,15 @@
       for (const a of st.actions) if (a.type === 'buy') {
         const l = pl.lines[a.line];
         for (const g of a.items) {
-          const x = m.get(g.id) || { g, q: 0, price: Infinity, uses: [] };
+          const x = m.get(g.id) || { g, q: 0, price: Infinity, uses: [], be: Infinity };
           x.q += E.buyQty(g, l.n); x.price = Math.min(x.price, g.price);
+          const be = E.breakEven(g, l); if (be != null) x.be = Math.min(x.be, be);
           x.uses.push(l.salvage ? 'à recycler' : l.flip ? 'à revendre' : l.id === g.id ? '' : 'pour ' + esc(l.name));
           m.set(g.id, x);
         }
       }
       return [...m.values()].map(x => { const u = [...new Set(x.uses.filter(Boolean))];
-        return `<li><b>${buyVerb}</b> <span class="q">${fmt(x.q)}</span> ${esc(x.g.name)}${tierOf(x.g.id)} <span class="muted">à ${fmt(x.price)} max${u.length ? ' · ' + (u.length > 2 ? u.length + ' lignes' : u.join(', ')) : ''}</span></li>`; }).join('');
+        return `<li><b>${buyVerb}</b> <span class="q">${fmt(x.q)}</span> ${esc(x.g.name)}${tierOf(x.g.id)} <span class="muted">vu à ${fmt(x.price)}${isFinite(x.be) ? ' · <b>rentable jusqu\'à ' + fmt(x.be) + '</b>' : ''}${u.length ? ' · ' + (u.length > 2 ? u.length + ' lignes' : u.join(', ')) : ''}</span></li>`; }).join('');
     }
     // matières issues du recyclage : une ligne par objet
     function outRows(st) {
@@ -317,6 +323,7 @@
       ${advHTML}${over ? `<p class="warnbox">Trop lourd pour ta monture sur au moins un trajet (${fmt(r.maxKg)} kg pour ${fmt(cap)} kg) : fais ce trajet en plusieurs fois, ou téléporte une partie, ou baisse la part de liquidité dans le profil.</p>` : ''}
       <ol class="stops">${r.stops.map((st, k) => `<li class="stop"><h4>${esc(st.city === 'Black Market' ? 'Black Market (Caerleon)' : st.city)}</h4>
         <ul class="tasks">${buyRows(st)}${st.actions.slice().sort((a, b) => ORDER[a.type] - ORDER[b.type]).map(act).join('')}${outRows(st)}</ul>
+        ${cap && st.peakKg > cap ? `<p class="muted small">Pendant l'arrêt tu montes jusqu'à ${fmt(st.peakKg)} kg (${Math.round(st.peakKg / cap * 100)} % de ta charge) : dépose à la banque entre les achats et le craft.</p>` : ''}
         ${st.next ? `<p class="go">→ Aller à <b>${esc(st.next.city)}</b> <span class="${cap && st.kg > cap ? 'neg' : 'muted'}">avec ${fmt(st.kg)} kg${cap && st.kg > cap ? ' : ' + Math.ceil(st.kg / cap) + ' voyages' : ''}</span> <span class="muted">≈ ${fmt(st.next.minutes)} min${st.next.city === 'Brecilien' || st.city === 'Brecilien' ? ' · par une brume en zone jaune' : ' · Travel Planner, voyage gratuit (ou téléportation si une ligne l\'indique)'}</span></p>` : ''}</li>`).join('')}</ol></section>`;
   }
 
@@ -332,7 +339,7 @@
     const bm = l.sellVenue === 'Black Market';
     const sellVerb = E.sellByOrder(p) && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
     const ench = l.ench ? '.' + l.ench : '';
-    const ings = l.ingredients.map(g => `<li><span class="q">${fmt(E.buyQty(g, l.n))}</span> ${esc(g.name)} <span class="muted">à ${fmt(g.price)} max${g.city && g.city !== l.city ? ' · <b>' + esc(g.city) + '</b>' : ''}</span></li>`).join('');
+    const ings = l.ingredients.map(g => `<li><span class="q">${fmt(E.buyQty(g, l.n))}</span> ${esc(g.name)} <span class="muted">vu à ${fmt(g.price)}${E.breakEven(g, l) != null ? ' · rentable jusqu\'à ' + fmt(E.breakEven(g, l)) : ''}${g.city && g.city !== l.city ? ' · <b>' + esc(g.city) + '</b>' : ''}</span></li>`).join('');
     return `<article class="line" data-i="${i}">
       <header><label class="chk"><input type="checkbox" id="done-${i}"> <span class="kind">${esc(l.kindLabel)}</span></label>
         <h4>${esc(l.name)} <span class="tier">T${l.tier}${ench}</span></h4>

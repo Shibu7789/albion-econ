@@ -66,8 +66,11 @@
         const b = priceOf(prices, id, city, 'buy', prof.maxAge);
         return b == null ? null : b * (1 + C.setupFee);
       }
-      return priceOf(prices, id, city, 'sell', prof.maxAge);
+      // achat direct : il faut un prix RÉCENT (un vieux relevé d'ordre de vente a souvent déjà été acheté)
+      return priceOf(prices, id, city, 'sell', Math.min(prof.maxAge, prof.maxAgeBuy != null ? prof.maxAgeBuy : 4));
     }
+    // Prix max auquel un ingrédient garde la ligne rentable (tout le profit absorbé par cet ingrédient)
+    function breakEven(l, o) { return l.effQty > 0 ? l.price + o.profit / l.effQty : null; }
     function salesTax(prof) { return prof.premium ? C.salesTax / 2 : C.salesTax; }
     // Argent net reçu pour 1 unité vendue
     function dispose(prices, id, city, prof) {
@@ -800,9 +803,11 @@
       const add = (li, id, q) => hold[li].set(id, (hold[li].get(id) || 0) + q);
       let maxKg = 0;
       for (const st of stops) {
+        let peak = 0;
         for (const a of st.actions.slice().sort((x, y) => ({ buy: 0, make: 1, salvage: 1, sell: 2 })[x.type] - ({ buy: 0, make: 1, salvage: 1, sell: 2 })[y.type])) {
           const l = lines[a.line];
           if (a.type === 'buy') for (const g of a.items) add(a.line, g.id, buyQty(g, l.n));
+          if (a.type === 'buy' || a.type === 'make' || a.type === 'salvage') { let k2 = 0; for (const h of hold) for (const [id, q] of h) k2 += q * W(id); peak = Math.max(peak, k2); }
           else if (a.type === 'make') { hold[a.line].clear(); add(a.line, l.id, l.n * l.amount); }
           else if (a.type === 'salvage') { hold[a.line].clear(); for (const x of l.outputs) add(a.line, x.id, x.units * l.n); }
           else if (a.outputs) { for (const x of a.outputs) hold[a.line].delete(x.id); }
@@ -810,6 +815,7 @@
         }
         let kg = 0; for (const h of hold) for (const [id, q] of h) kg += q * W(id);
         st.kg = kg; if (st.next) maxKg = Math.max(maxKg, kg);
+        st.peakKg = Math.max(kg, peak);
       }
       return { stops, minutes: found.cost, maxKg };
     }
@@ -833,7 +839,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, sellByOrder, buyByOrder, applyHistory, tcost, tpCost, buyQty, startCapital, route, tierCap, nodesToLevel, craftFame, journalGain, progressionCandidates, progressionPick, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, breakEven, sellByOrder, buyByOrder, applyHistory, tcost, tpCost, buyQty, startCapital, route, tierCap, nodesToLevel, craftFame, journalGain, progressionCandidates, progressionPick, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };
