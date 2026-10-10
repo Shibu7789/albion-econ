@@ -84,22 +84,22 @@
     store.set('ae.tab', name);
   }
 
-  /* ---------- Bonus du jour : quelques lignes ville + catégorie + %, valables aujourd'hui seulement ---------- */
+  /* ---------- Bonus du jour : catégorie + %, valable dans toutes les villes, aujourd'hui seulement ---------- */
   const today = () => new Date().toISOString().slice(0, 10);
   function dailyList() { const p = prof(); return p.dailyDate === today() ? (p.dailyList || []) : []; }
-  function dailyToMap(list) { const m = {}; for (const d of list) if (d.city && d.pct > 0) m[d.city] = { pct: d.pct, cat: d.cat || null }; return m; }
+  const dailyActive = list => list.filter(d => d.cat && d.pct > 0).map(d => ({ cat: d.cat, pct: d.pct }));
+  function dailySum(list) { const a = dailyActive(list); return a.length ? a.map(d => `${CAT_LABEL[d.cat] || d.cat} +${Math.round(d.pct * 100)} %`).join(', ') : 'aucun'; }
   function renderDaily() {
-    const list = dailyList();
-    const catOpts = sel => '<option value="">toutes catégories</option>' + Object.entries(CAT_LABEL).map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`).join('');
-    const cityOpts = sel => E.CITIES.map(c => `<option ${c === sel ? 'selected' : ''}>${c}</option>`).join('');
-    $('#daily-rows').innerHTML = list.map((d, k) => `<div class="drow" data-k="${k}"><select data-dc>${cityOpts(d.city)}</select><select data-dk>${catOpts(d.cat)}</select><input type="number" min="0" step="1" data-dp value="${d.pct ? Math.round(d.pct * 100) : ''}" placeholder="%"><button class="ghost small" data-del="${k}" type="button">×</button></div>`).join('');
-    $('#daily-sum').textContent = list.length ? list.map(d => `${d.city} +${Math.round(d.pct * 100)} %`).join(', ') : 'aucun';
+    let list = dailyList(); while (list.length < 2) list = list.concat([{ cat: null, pct: 0 }]);   // en jeu : 2 bonus par jour en général
+    const catOpts = sel => '<option value="">— catégorie —</option>' + Object.entries(CAT_LABEL).map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`).join('');
+    const pctOpts = sel => '<option value="0">— bonus —</option>' + [5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map(v => `<option value="${v}" ${Math.round((sel || 0) * 100) === v ? 'selected' : ''}>+${v} %</option>`).join('');
+    $('#daily-rows').innerHTML = list.map((d, k) => `<div class="drow" data-k="${k}"><select data-dk>${catOpts(d.cat)}</select><select data-dp>${pctOpts(d.pct)}</select>${k > 1 ? `<button class="ghost small" data-del="${k}" type="button">×</button>` : ''}</div>`).join('');
+    $('#daily-sum').textContent = dailySum(list);
   }
   function saveDaily() {
-    const list = $$('#daily-rows .drow').map(r => ({ city: r.querySelector('[data-dc]').value, cat: r.querySelector('[data-dk]').value || null,
-      pct: (+r.querySelector('[data-dp]').value || 0) / 100 }));
-    updateProf({ dailyDate: today(), dailyList: list, dailyBonus: dailyToMap(list) });
-    $('#daily-sum').textContent = list.filter(d => d.pct > 0).length ? list.filter(d => d.pct > 0).map(d => `${d.city} +${Math.round(d.pct * 100)} %`).join(', ') : 'aucun';
+    const list = $$('#daily-rows .drow').map(r => ({ cat: r.querySelector('[data-dk]').value || null, pct: (+r.querySelector('[data-dp]').value || 0) / 100 }));
+    updateProf({ dailyDate: today(), dailyList: list });
+    $('#daily-sum').textContent = dailySum(list);
   }
 
   /* ---------- Analyse du jour ---------- */
@@ -113,7 +113,7 @@
   }
   function engineProfile(p) {
     return Object.assign({}, p, { capital: Math.max(0, (p.bank || 0) - (p.reserve || 0) - lockedSinceBank(p)),
-      dailyBonus: p.dailyDate === today() ? dailyToMap(p.dailyList || []) : {}, carryKg: carryCap(p) });
+      dailyBonus: p.dailyDate === today() ? dailyActive(p.dailyList || []) : [], carryKg: carryCap(p) });
   }
   function itemFilter(p) {
     const fams = new Set(p.families);
@@ -596,10 +596,10 @@
     $$('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
     showTab(store.get('ae.tab', 'today'));
     $('#run').addEventListener('click', analyze);
-    $('#daily-add').addEventListener('click', () => { const l = dailyList().concat([{ city: 'Lymhurst', cat: null, pct: 0 }]); updateProf({ dailyDate: today(), dailyList: l }); renderDaily(); });
+    $('#daily-add').addEventListener('click', () => { const l0 = dailyList(); let l = l0.slice(); while (l.length < 2) l.push({ cat: null, pct: 0 }); l = l.concat([{ cat: null, pct: 0 }]); updateProf({ dailyDate: today(), dailyList: l }); renderDaily(); });
     $('#daily-rows').addEventListener('change', saveDaily);
     $('#daily-rows').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (!b) return;
-      const l = dailyList(); l.splice(+b.dataset.del, 1); updateProf({ dailyDate: today(), dailyList: l, dailyBonus: dailyToMap(l) }); renderDaily(); });
+      const l = dailyList(); l.splice(+b.dataset.del, 1); updateProf({ dailyDate: today(), dailyList: l }); renderDaily(); });
     $('#plan').addEventListener('click', e => { const b = e.target.closest('[data-start]'); if (b) startLine(b.dataset.start.startsWith('bm') ? b.dataset.start : +b.dataset.start); });
     $('#log').addEventListener('click', e => { const b = e.target.closest('[data-sold]'); if (b) sellEntry(b.dataset.sold); });
     $('#p-profile').addEventListener('change', e => { if (e.target.dataset.spec !== undefined) {

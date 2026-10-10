@@ -43,8 +43,9 @@
       let b = kind === 1 ? c.raff : c.craft;
       if (item.cc && c.spe[item.cc]) b += c.spe[item.cc];
       if (useFocus) b += C.focusBonus;
-      // bonus du jour : { pct, cat } — ne s'applique qu'à la catégorie annoncée en jeu pour cette ville
-      if (dailyBonus && dailyBonus.pct && (!dailyBonus.cat || dailyBonus.cat === item.cc)) b += dailyBonus.pct;
+      // bonus du jour : liste [{ pct, cat }] valable dans toutes les villes, seulement sur sa catégorie
+      for (const d of Array.isArray(dailyBonus) ? dailyBonus : (dailyBonus ? [dailyBonus] : []))
+        if (d && d.pct && (!d.cat || d.cat === item.cc)) b += d.pct;
       return b;
     }
 
@@ -167,7 +168,7 @@
         // raffinage, transmutation et craft d'ingrédients (extraits, sauces, alcool, pain, beurre, viande…)
         const [silver, focusBase, amount, , ings] = rec;
         const f = withFocus && focusBase > 0;
-        const R = rrr(productionBonus(item, kind, city, f, prof.dailyBonus && prof.dailyBonus[city]));
+        const R = rrr(productionBonus(item, kind, city, f, Array.isArray(prof.dailyBonus) ? prof.dailyBonus : (prof.dailyBonus && prof.dailyBonus[city])));
         let cost = silver || 0, focus = f ? focusCost(focusBase, fce(idx, prof.specs, 'f')) : 0;
         const leaves = [], steps = [];
         let ok = true;
@@ -250,7 +251,7 @@
       const item = items[itemIdx];
       const [silver, focusBase, amount, , ings] = recipe;
       if (useFocus && !(focusBase > 0)) return null;
-      const B = productionBonus(item, kind, city, useFocus, prof.dailyBonus && prof.dailyBonus[city]);
+      const B = productionBonus(item, kind, city, useFocus, Array.isArray(prof.dailyBonus) ? prof.dailyBonus : (prof.dailyBonus && prof.dailyBonus[city]));
       const R = rrr(B);
       let cost = silver || 0;
       const lines = [];

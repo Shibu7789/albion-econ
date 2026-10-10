@@ -120,9 +120,9 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
   <h2>Ta liste du jour</h2>
   <p class="lead">L'outil lit les prix du marché européen, calcule chaque recette dans tes villes avec ta spécialisation, et retient les lignes qui tiennent dans ton temps, ton capital et ton focus.</p>
   <div id="fee-warn" class="warnbox" hidden></div>
-  <details class="daily" id="daily-box"><summary>Bonus de production du jour <span class="muted" id="daily-sum">aucun</span></summary>
-    <p class="muted small">Seulement s'il y en a un aujourd'hui. Il s'efface tout seul demain.</p>
-    <div id="daily-rows"></div><button class="ghost small" id="daily-add" type="button">+ ajouter un bonus</button></details>
+  <details class="daily" id="daily-box" open><summary>Bonus de production du jour <span class="muted" id="daily-sum">aucun</span></summary>
+    <p class="muted small">Valable dans toutes les villes, seulement sur la catégorie choisie. S'efface tout seul demain.</p>
+    <div id="daily-rows"></div><button class="ghost small" id="daily-add" type="button">+ autre bonus</button></details>
   <div class="runbar"><button class="primary" id="run">Analyser le marché</button><span id="status" role="status"></span></div>
   <p class="muted small" id="k-locked"></p>
   <div class="kpis" id="kpis" hidden>
@@ -229,12 +229,12 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
     <li><b>Hypothèses à mesurer</b> : frais de station (valeur d'objet × 0,1125 × prix), rendement des travailleurs, minutes par ligne. Le journal des résultats remplace peu à peu ces hypothèses par tes chiffres réels.</li>
   </ul>
 </section>
-  <p class="muted small" style="margin-top:40px">Version 20261010-0635</p>
+  <p class="muted small" style="margin-top:40px">Version 20261010-0640</p>
 </main>
-<script src="data.js?v=20261010-0635"></script>
-<script src="preset.js?v=20261010-0635"></script>
-<script src="engine.js?v=20261010-0635"></script>
-<script src="market.js?v=20261010-0635"></script>
-<script src="app.js?v=20261010-0635"></script>
+<script src="data.js?v=20261010-0640"></script>
+<script src="preset.js?v=20261010-0640"></script>
+<script src="engine.js?v=20261010-0640"></script>
+<script src="market.js?v=20261010-0640"></script>
+<script src="app.js?v=20261010-0640"></script>
 </body>
 </html>
