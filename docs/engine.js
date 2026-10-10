@@ -687,7 +687,7 @@
         .map(nd => ({ id: nd.id, name: nd.n, level: (prof.specs && prof.specs[nd.id]) || 0 }));
     }
     // Étape 1 (prix seulement) : meilleurs crafts sans focus qui montent une spé non maximale, au tier débloqué.
-    // Renommée : proportionnelle à la valeur d'objet du jeu (FameGainFactors, gamedata) — mesure relative.
+    // Renommée : table par ressource (craftFame), à recouper en jeu.
     function progressionCandidates(prices, prof, limit) {
       const cands = [];
       const cities = prof.cities && prof.cities.length ? prof.cities : CITIES;
@@ -700,8 +700,9 @@
           if (rec[3] !== 0) continue;
           const o = evaluate(prices, idx, rec, 0, city, false, prof);
           if (!o || !(o.cost > 0)) continue;
-          const score = o.profit >= 0 ? 1e9 + item.v : item.v / -o.profit;   // renommée par argent perdu
-          if (!best || score > best.score) best = Object.assign(o, { score, prog: true, levels: lv, fameValue: item.v });
+          const fame = craftFame(item, rec) || item.v;                       // renommée du craft (table tierce), sinon valeur d'objet
+          const score = o.profit >= 0 ? 1e9 + fame : fame / -o.profit;       // renommée par argent perdu (journaux déjà comptés)
+          if (!best || score > best.score) best = Object.assign(o, { score, prog: true, levels: lv, fameValue: fame });
         }
         if (best) cands.push(withTrips(best, prof));
       });
