@@ -137,6 +137,14 @@
       oppsBM.sort((a, b) => b.profit - a.profit);
       const keep = new Set(), keepBM = new Set();
       for (const o of opps) { if (keep.size >= 1000) break; keep.add(o.id); }
+      // Le tri par profit unitaire écarte les produits bon marché à gros volume (raffinage, transmutation…) :
+      // chaque famille garde aussi ses 150 meilleurs objets, et tout le raffinage passe au contrôle par les ventes.
+      const famKey = o => o.flip ? 'flip' : o.salvage ? 'salv' : o.kind === 1 ? 'raff' : o.kind === 2 ? 'trans' : o.kind === 3 ? 'up' : familyOf(DATA.items[o.itemIdx]);
+      const perFam = {};
+      for (const o of opps) {
+        const k = famKey(o); const set = perFam[k] || (perFam[k] = new Set());
+        if (k === 'raff' || set.size < 150 || set.has(o.id)) { set.add(o.id); keep.add(o.id); }
+      }
       for (const o of oppsBM) { if (keepBM.size >= 300) break; keepBM.add(o.id); }
       const top = opps.filter(o => keep.has(o.id)), topBM = oppsBM.filter(o => keepBM.has(o.id));
       const vNeed = new Set();
