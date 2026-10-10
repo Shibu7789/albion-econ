@@ -151,6 +151,7 @@
       const ROYALS = ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Brecilien'];   // Brecilien : accès par une brume en zone jaune, sans risque (sur place seulement)
       const risky = !!p.riskyOuting;
       const riskyCities = risky ? p.cities.filter(c => !ROYALS.includes(c)) : [];
+      (DATA.mounts || []).forEach(m => need.add(m.id));        // prix des montures de charge (conseil d'achat)
       const locs = p.cities.filter(c => ROYALS.includes(c)).concat(riskyCities, riskyCities.includes('Caerleon') ? ['Black Market'] : []);
       setStatus(`Lecture des prix : ${need.size} objets, ${locs.length} marchés…`);
       const prices = await M.fetchPrices([...need], locs, { onProgress: (d, t) => setStatus(`Lecture des prix… ${d}/${t}`) });
@@ -194,6 +195,15 @@
       const progCost = prog.reduce((s, l) => s + l.totalCost, 0);
       const progMin = prog.length * (p.minutesPerLine || 5);
       lastPlan = E.plan(checked, volumes, Object.assign({}, pDay, { capital: Math.max(0, pDay.capital - progCost), minutes: Math.max(0, pDay.minutes - progMin) }));
+      // Conseil monture : refaire le plan avec chaque monture plus grosse, payée sur le capital, et mesurer le gain par jour
+      const curKg = pDay.carryKg || 0, baseKg = curKg - (((DATA.mounts || []).find(x => x.id === p.mount) || {}).kg || 0);
+      lastPlan.mountAdvice = (DATA.mounts || []).map(m => {
+        const price = Math.min(...['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling'].map(c => E.acquire(prices, m.id, c, Object.assign({}, pDay, { mode: 'instant' }))).filter(x => x != null));
+        if (!isFinite(price) || baseKg + m.kg <= curKg || price > pDay.capital) return null;
+        const alt = E.plan(checked, volumes, Object.assign({}, pDay, { carryKg: baseKg + m.kg, capital: Math.max(0, pDay.capital - progCost - price), minutes: Math.max(0, pDay.minutes - progMin) }));
+        const gain = alt.totalProfit - (lastPlan.totalProfit);
+        return gain > 0 ? { id: m.id, name: m.n, kg: m.kg, price, gain, days: price / gain } : null;
+      }).filter(Boolean).sort((a, b) => a.days - b.days).slice(0, 3);
       lastPlan.lines = lastPlan.lines.concat(prog);
       lastPlan.totalProfit += prog.reduce((s, l) => s + l.totalProfit, 0);
       lastPlan.capitalUsed += progCost; lastPlan.minutesUsed += progMin;
@@ -247,7 +257,7 @@
 
   // Capacité de transport : ta charge sans monture (profil, défaut = charge de base officielle) + bonus de la monture choisie
   const carryCap = p => { const m = (DATA.mounts || []).find(x => x.id === p.mount); const base = p.baseLoad != null ? p.baseLoad : (DATA.baseLoad || 0);
-    return m || p.baseLoad != null ? base + (m ? m.kg : 0) : 0; };
+    return m ? base + m.kg : (p.mount === 'none' || p.baseLoad != null ? base : 0); };   // 0 = non renseigné
   // Tournée : une liste de tâches par ville, dans l'ordre qui évite les allers-retours
   const tierOf = id => { const it = DATA.items[E.index.get(id)]; return it ? ` <span class="tier">T${it.t}${it.e ? '.' + it.e : ''}</span>` : ''; };
   const JTYPE = { WARRIOR: 'Guerrier (forgeron)', HUNTER: 'Chasseur (archer-fabricant)', MAGE: 'Mage (enchanteur)', TOOLMAKER: 'Outilleur' };
@@ -301,8 +311,10 @@
     }
     const cap = carryCap(p);
     const over = cap > 0 && r.maxKg > cap;
+    const adv = (pl.mountAdvice || []);
+    const advHTML = adv.length ? `<p class="warnbox"><b>Monture à prévoir :</b> ${adv.map(a => `${esc(a.name)} (+${fmt(a.kg)} kg) ≈ ${fmtK(a.price)} → +${fmtK(a.gain)} aujourd'hui, remboursée en ${a.days < 1 ? 'moins d\'un jour' : Math.ceil(a.days) + ' jour' + (Math.ceil(a.days) > 1 ? 's' : '')}`).join(' · ')}. <span class="muted">Calculé sur le marché du jour, payé sur ton capital (jamais sur la réserve). Vérifie que ton niveau d'équitation permet de la monter.</span></p>` : '';
     return `<section class="tour"><h3>Ta tournée <span class="muted">${r.stops.length} arrêt${r.stops.length > 1 ? 's' : ''} · ${fmt(r.minutes)} min de trajets · charge max ${fmt(r.maxKg)} kg${cap ? ' / ' + fmt(cap) + ' kg' : ''}</span></h3>
-      ${over ? `<p class="warnbox">Trop lourd pour ta monture sur au moins un trajet (${fmt(r.maxKg)} kg pour ${fmt(cap)} kg) : fais ce trajet en plusieurs fois, ou téléporte une partie, ou baisse la part de liquidité dans le profil.</p>` : ''}
+      ${advHTML}${over ? `<p class="warnbox">Trop lourd pour ta monture sur au moins un trajet (${fmt(r.maxKg)} kg pour ${fmt(cap)} kg) : fais ce trajet en plusieurs fois, ou téléporte une partie, ou baisse la part de liquidité dans le profil.</p>` : ''}
       <ol class="stops">${r.stops.map((st, k) => `<li class="stop"><h4>${esc(st.city === 'Black Market' ? 'Black Market (Caerleon)' : st.city)}</h4>
         <ul class="tasks">${buyRows(st)}${st.actions.slice().sort((a, b) => ORDER[a.type] - ORDER[b.type]).map(act).join('')}${outRows(st)}</ul>
         ${st.next ? `<p class="go">→ Aller à <b>${esc(st.next.city)}</b> <span class="${cap && st.kg > cap ? 'neg' : 'muted'}">avec ${fmt(st.kg)} kg${cap && st.kg > cap ? ' : ' + Math.ceil(st.kg / cap) + ' voyages' : ''}</span> <span class="muted">≈ ${fmt(st.next.minutes)} min${st.next.city === 'Brecilien' || st.city === 'Brecilien' ? ' · par une brume en zone jaune' : ' · Travel Planner, voyage gratuit (ou téléportation si une ligne l\'indique)'}</span></p>` : ''}</li>`).join('')}</ol></section>`;
@@ -423,7 +435,7 @@
     $('#pf-select').innerHTML = Object.keys(profiles.list).map(n => `<option ${n === profiles.active ? 'selected' : ''}>${esc(n)}</option>`).join('');
     $('#pf-premium').checked = !!p.premium;
     $('#pf-focus').value = p.focus; $('#pf-bank').value = p.bank; $('#pf-reserve').value = p.reserve;
-    $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes; $('#pf-goal').value = p.goalPerDay ?? ''; $('#pf-mount').innerHTML = '<option value="">Aucune monture de charge</option>' + (DATA.mounts || []).map(m => `<option value="${m.id}" ${m.id === p.mount ? 'selected' : ''}>${esc(m.n)} (+${fmt(m.kg)} kg)</option>`).join(''); $('#pf-baseload').value = p.baseLoad ?? ''; $('#pf-prog').value = Math.round((p.progressShare ?? 0) * 100);
+    $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes; $('#pf-goal').value = p.goalPerDay ?? ''; $('#pf-mount').innerHTML = '<option value="">Non renseignée</option><option value="none" ' + (p.mount === 'none' ? 'selected' : '') + '>Aucune monture de charge (cheval, loup…)</option>' + (DATA.mounts || []).map(m => `<option value="${m.id}" ${m.id === p.mount ? 'selected' : ''}>${esc(m.n)} (+${fmt(m.kg)} kg)</option>`).join(''); $('#pf-baseload').value = p.baseLoad ?? ''; $('#pf-prog').value = Math.round((p.progressShare ?? 0) * 100);
     $('#pf-multi').checked = !!p.multiCity; $('#pf-risky').checked = !!p.riskyOuting; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-brecmin').value = p.brecilienMinutes ?? ''; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = p.travelMult ?? 1;
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
