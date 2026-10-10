@@ -191,16 +191,22 @@
       const volumes = await M.fetchVolumes([...vNeed], locs, { onProgress: (d, t) => setStatus(`Lecture des ventes des 7 derniers jours… ${d}/${t}`) });
       lastPrices = prices; lastVolumes = volumes;
       const checked = E.applyHistory(top, volumes, prices, pDay).sort((a, b) => b.profit - a.profit);
-      const prog = E.progressionPick(progC, volumes, pDay, pDay.capital * (p.progressShare || 0));
+      // Progression : budget réservé, mais SEULEMENT dans les villes déjà sur la tournée du jour (aucun trajet en plus)
+      const progBudget = pDay.capital * (p.progressShare || 0);
+      const progReserve = progBudget > 0 ? 2 * (p.minutesPerLine || 5) : 0;   // place pour 2 lignes de progression sur place
+      lastPlan = E.plan(checked, volumes, Object.assign({}, pDay, { capital: Math.max(0, pDay.capital - progBudget), minutes: Math.max(0, pDay.minutes - progReserve) }));
+      const onRoute = new Set(lastPlan.route.length ? lastPlan.route : [pDay.cities[0]]);
+      const progOk = progC.filter(o => onRoute.has(o.city) && (o.trips || []).every(c => onRoute.has(c)));
+      const progMinAvail = Math.max(0, pDay.minutes - lastPlan.minutesUsed);
+      const prog = E.progressionPick(progOk, volumes, pDay, progBudget).slice(0, Math.floor(progMinAvail / (p.minutesPerLine || 5)));
       const progCost = prog.reduce((s, l) => s + l.totalCost, 0);
       const progMin = prog.length * (p.minutesPerLine || 5);
-      lastPlan = E.plan(checked, volumes, Object.assign({}, pDay, { capital: Math.max(0, pDay.capital - progCost), minutes: Math.max(0, pDay.minutes - progMin) }));
       // Conseil monture : refaire le plan avec chaque monture plus grosse, payée sur le capital, et mesurer le gain par jour
       const curKg = pDay.carryKg || 0, baseKg = curKg - (((DATA.mounts || []).find(x => x.id === p.mount) || {}).kg || 0);
       lastPlan.mountAdvice = (DATA.mounts || []).map(m => {
         const price = Math.min(...['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling'].map(c => E.acquire(prices, m.id, c, Object.assign({}, pDay, { mode: 'instant' }))).filter(x => x != null));
         if (!isFinite(price) || baseKg + m.kg <= curKg || price > pDay.capital) return null;
-        const alt = E.plan(checked, volumes, Object.assign({}, pDay, { carryKg: baseKg + m.kg, capital: Math.max(0, pDay.capital - progCost - price), minutes: Math.max(0, pDay.minutes - progMin) }));
+        const alt = E.plan(checked, volumes, Object.assign({}, pDay, { carryKg: baseKg + m.kg, capital: Math.max(0, pDay.capital - progBudget - price), minutes: Math.max(0, pDay.minutes - progReserve) }));
         const gain = alt.totalProfit - (lastPlan.totalProfit);
         return gain > 0 ? { id: m.id, name: m.n, kg: m.kg, price, gain, days: price / gain } : null;
       }).filter(Boolean).sort((a, b) => a.days - b.days).slice(0, 3);
