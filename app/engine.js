@@ -57,8 +57,11 @@
       return p.buy > 0 && p.buyAge <= maxAge ? p.buy : null;
     }
     // Prix payé pour acquérir 1 ingrédient
+    // Modes : 'mixed' (achat direct, vente par ordre : la tournée se fait d'une traite), 'instant', 'orders'
+    const buyByOrder = prof => prof.mode === 'orders';
+    const sellByOrder = prof => prof.mode === 'orders' || prof.mode === 'mixed';
     function acquire(prices, id, city, prof) {
-      if (prof.mode === 'orders') {
+      if (buyByOrder(prof)) {
         const b = priceOf(prices, id, city, 'buy', prof.maxAge);
         return b == null ? null : b * (1 + C.setupFee);
       }
@@ -69,7 +72,7 @@
     function dispose(prices, id, city, prof) {
       const tax = salesTax(prof);
       // le Black Market n'accepte pas d'ordres de vente : on lui vend toujours directement
-      if (prof.mode === 'orders' && city !== 'Black Market') {
+      if (sellByOrder(prof) && city !== 'Black Market') {
         const s = priceOf(prices, id, city, 'sell', prof.maxAge);
         return s == null ? null : s * (1 - tax - C.setupFee);
       }
@@ -486,13 +489,14 @@
     //  - achat : chaque ingrédient dans la ville la moins chère où il s'échange réellement.
     function applyHistory(opps, volumes, prices, prof) {
       const out = [];
-      const fees = salesTax(prof) + (prof.mode === 'orders' ? C.setupFee : 0);
+      const fees = salesTax(prof) + (sellByOrder(prof) ? C.setupFee : 0);
       const H = (id, c) => { const h = volumes[id] && volumes[id][c]; return h && typeof h === 'object' ? h : null; };
       for (const o of opps) {
         if (o.salvage) {
           // achat : l'objet doit s'échanger dans la ville ; ventes : chaque matière plafonnée à son prix moyen payé
           const hb = H(o.id, o.city);
           if (!hb || !(hb.n > 0)) continue;
+          const buyCost = hb.p > 0 ? Math.max(o.cost, hb.p) : o.cost;  // prix d'achat prudent (moyenne 7 jours)
           let revenue = 0, capped = false;
           const outs = [];
           for (const x of o.outputs) {
@@ -503,9 +507,10 @@
             const net = Math.min(x.net, cap); if (net < x.net) capped = true;
             revenue += x.units * net; outs.push(Object.assign({}, x, { net }));
           }
-          const profit = revenue - o.cost;
-          if (outs.length && profit > 0 && profit / o.cost >= prof.minMargin)
-            out.push(withTrips(Object.assign({}, o, { outputs: outs, revenue, unitSell: revenue, profit, margin: profit / o.cost, capped }), prof));
+          const profit = revenue - buyCost;
+          if (outs.length && profit > 0 && profit / buyCost >= prof.minMargin)
+            out.push(withTrips(Object.assign({}, o, { cost: buyCost, ingredients: [Object.assign({}, o.ingredients[0], { price: buyCost })],
+              outputs: outs, revenue, unitSell: revenue, profit, margin: profit / buyCost, capped }), prof));
           continue;
         }
         // vente
@@ -533,8 +538,9 @@
             if (!h || !(h.n > 0)) continue;
             const p = acquire(prices, l.id, c, prof);
             if (p == null) continue;
-            const eff = p;
-            if (!b || eff < b.eff) b = { eff, raw: p, city: c };
+            // prudence : en achetant en quantité on remonte le carnet d'ordres ; on compte au moins le prix moyen payé sur 7 jours
+            const eff = h.p > 0 ? Math.max(p, h.p) : p;
+            if (!b || eff < b.eff) b = { eff, raw: eff, city: c };
           }
           if (!b) { ok = false; return l; }
           const prevEff = l.price;
@@ -718,7 +724,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, applyHistory, tcost, tpCost, buyQty, startCapital, route, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, sellByOrder, buyByOrder, applyHistory, tcost, tpCost, buyQty, startCapital, route, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

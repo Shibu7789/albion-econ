@@ -168,7 +168,8 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
     <label class="field"><span>Réserve intouchable</span><input type="number" id="pf-reserve" min="0"></label>
     <label class="field"><span>Focus disponible</span><input type="number" id="pf-focus" min="0" max="30000"></label>
     <label class="field"><span>Temps pour l'économie (minutes)</span><input type="number" id="pf-minutes" min="5"></label>
-    <label class="field"><span>Achat et vente</span><select id="pf-mode"><option value="instant">Directs (immédiat)</option><option value="orders">Par ordres (24 h, meilleures marges)</option></select></label>
+    <label class="field"><span>Objectif de profit par jour</span><input type="number" min="0" step="100000" id="pf-goal"></label>
+    <label class="field"><span>Achat et vente</span><select id="pf-mode"><option value="mixed">Achat direct, vente par ordre (conseillé : la tournée se fait d'une traite)</option><option value="instant">Directs (immédiat)</option><option value="orders">Achat et vente par ordres (les achats peuvent prendre des heures)</option></select></label>
     <label class="chip" style="align-self:end"><input type="checkbox" id="pf-premium"> Premium actif</label>
   </div></div>
   <div class="card"><h3>Villes où tu acceptes d'agir</h3><div class="chips" id="pf-cities"></div>

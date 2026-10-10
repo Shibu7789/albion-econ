@@ -51,7 +51,7 @@
   const DEFAULT_PROFILE = {
     name: 'Principal', premium: false, focus: 0, bank: 0, reserve: 10000000,
     cities: ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'],
-    multiCity: true, riskyOuting: false, travelMult: 1, travelMinutes: 5, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
+    multiCity: true, riskyOuting: false, travelMult: 1, travelMinutes: 5, mode: 'mixed', goalPerDay: 5000000, families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
     maxAge: 12, liqShare: 0.15, maxShare: 0.25, minMargin: 0.05, minutes: 45, minutesPerLine: 5,
     minLineProfit: 10000, stationFee: {}, dailyBonus: {}, specs: {},
   };
@@ -69,6 +69,7 @@
   // Nouvelle activité « Revente » : activée une fois dans les profils existants
   for (const pr of Object.values(profiles.list)) {
     if (pr.families && !pr.flipAdded) { if (!pr.families.includes('flip')) pr.families.push('flip'); pr.flipAdded = true; }
+    if (!pr.mixedMode) { if (pr.mode === 'orders' || !pr.mode) pr.mode = 'mixed'; pr.mixedMode = true; }   // la tournée se fait d'une traite
     if (pr.families && !pr.salvAdded) { if (!pr.families.includes('salv')) pr.families.push('salv'); pr.salvAdded = true; }
   }
   store.set('ae.profiles', profiles);
@@ -85,8 +86,15 @@
 
   /* ---------- Analyse du jour ---------- */
   let lastPlan = null, lastPrices = null, lastVolumes = null;
+  // Argent des lignes mises en vente APRÈS la dernière saisie de la banque : déjà dépensé, pas encore revenu.
+  // (Celles d'avant sont déjà sorties du solde que tu as saisi : pas de double comptage.)
+  function lockedSinceBank(p) {
+    const since = p.bankAt ? Date.parse(p.bankAt) : 0;
+    return store.get('ae.log.' + profiles.active, []).filter(r => r.status === 'en vente' && Date.parse(r.date) > since)
+      .reduce((s, r) => s + (r.cost || 0), 0);
+  }
   function engineProfile(p) {
-    return Object.assign({}, p, { capital: Math.max(0, (p.bank || 0) - (p.reserve || 0)) });
+    return Object.assign({}, p, { capital: Math.max(0, (p.bank || 0) - (p.reserve || 0) - lockedSinceBank(p)) });
   }
   function itemFilter(p) {
     const fams = new Set(p.families);
@@ -168,6 +176,7 @@
       for (const l of lastPlan.lines.concat(lastPlan.bm.lines)) l.dailyVol = l.salvage ? 0 : volOf(l.id, l.sellVenue);
       lastPlan.diag = { found: opps.length, checked: checked.length };
       lastPlan.capitalAvail = p.capital;
+      lastPlan.lockedDeducted = lockedSinceBank(p);
       lastPlan.at = new Date().toISOString();
       lastPlan.considered = opps.length;
       store.set('ae.lastPlan.' + profiles.active, lastPlan);
@@ -189,7 +198,7 @@
     $('#kpis').hidden = false;
     $('#k-profit').textContent = fmtK(pl.totalProfit);
     $('#k-capital').textContent = fmtK(pl.capitalUsed);
-    $('#k-capital-of').textContent = 'sur ' + fmtK(pl.capitalAvail) + ' disponibles';
+    $('#k-capital-of').textContent = 'sur ' + fmtK(pl.capitalAvail) + ' disponibles' + (pl.lockedDeducted > 0 ? ` (${fmtK(pl.lockedDeducted)} en vente déduits)` : '');
     $('#k-focus').textContent = fmt(pl.focusUsed);
     $('#k-time').textContent = fmt(pl.minutesUsed) + ' min';
     $('#k-route').textContent = pl.route && pl.route.length ? 'Tournée : ' + pl.route.join(' → ') + ' · ' + fmtK(pl.totalProfit / Math.max(1, pl.minutesUsed)) + ' par minute' : '';
@@ -208,12 +217,12 @@
 
   // Tournée : une liste de tâches par ville, dans l'ordre qui évite les allers-retours
   const tierOf = id => { const it = DATA.items[E.index.get(id)]; return it ? ` <span class="tier">T${it.t}${it.e ? '.' + it.e : ''}</span>` : ''; };
-  const sellPrice = (l, p) => l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && l.sellVenue !== 'Black Market' ? DATA.consts.setupFee : 0));
+  const sellPrice = (l, p) => l.unitSell / (1 - E.salesTax(p) - (E.sellByOrder(p) && l.sellVenue !== 'Black Market' ? DATA.consts.setupFee : 0));
   const ORDER = { buy: 0, make: 1, salvage: 1, sell: 2 };
   function tourHTML(pl, p) {
     const r = E.route(pl.lines, p);
     if (!r.stops.length) return '';
-    const buyVerb = p.mode === 'orders' ? 'Poser un ordre d\'achat' : 'Acheter';
+    const buyVerb = E.buyByOrder(p) ? 'Poser un ordre d\'achat' : 'Acheter';
     const name = l => `${esc(l.name)}${l.ench ? ' <span class="tier">T' + l.tier + '.' + l.ench + '</span>' : ' <span class="tier">T' + l.tier + '</span>'}`;
     const act = a => {
       const l = pl.lines[a.line], i = a.line;
@@ -225,7 +234,7 @@
         return `<li>${pre ? '<span class="muted">' + pre + '</span>' : ''}<b>${verb}</b> <span class="q">${fmt(l.n)}</span> × ${name(l)}${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}</li>`;
       }
       const bm = a.city === 'Black Market';
-      const verb = p.mode === 'orders' && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
+      const verb = E.sellByOrder(p) && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
       if (a.outputs) return '';                                // regroupés par objet (voir outRows)
       return `<li><b>${verb}</b> <span class="q">${fmt(l.n * l.amount)}</span> × ${name(l)} <span class="muted">à ${fmt(sellPrice(l, p))}</span> <span class="gainmini">+${fmtK(l.totalProfit)}</span> <button class="ghost real small" data-start="${i}">Mis en vente</button></li>`;
     };
@@ -267,9 +276,9 @@
   }
 
   function lineHTML(l, i, p) {
-    const buyVerb = p.mode === 'orders' ? 'Poser un ordre d\'achat' : 'Acheter';
+    const buyVerb = E.buyByOrder(p) ? 'Poser un ordre d\'achat' : 'Acheter';
     const bm = l.sellVenue === 'Black Market';
-    const sellVerb = p.mode === 'orders' && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
+    const sellVerb = E.sellByOrder(p) && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
     const ench = l.ench ? '.' + l.ench : '';
     const ings = l.ingredients.map(g => `<li><span class="q">${fmt(E.buyQty(g, l.n))}</span> ${esc(g.name)} <span class="muted">à ${fmt(g.price)} max${g.city && g.city !== l.city ? ' · <b>' + esc(g.city) + '</b>' : ''}</span></li>`).join('');
     return `<article class="line" data-i="${i}">
@@ -286,7 +295,7 @@
           : `<li><b>${l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter'}</b> ${fmt(l.n)} fois${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}${l.useFocus === 'all' ? ', toute la chaîne' : ''}</span>` : ''}
           ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
         ${moveHTML(l, p)}
-        ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
+        ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (E.sellByOrder(p) && !bm ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
       </ol>
       <footer><span class="muted">Investissement ${fmtK(l.totalCost)}${l.stockCost > 0 ? ` (dont ${fmtK(l.stockCost)} de stock de départ : le retour de ressources arrive après chaque craft, ce stock te reste à la fin)` : ''} · ${fmt(l.minutes || p.minutesPerLine)} min dans ta tournée${l.trips && l.trips.length ? ' · villes : ' + [l.city].concat(l.trips).map(esc).join(', ') : ''}</span>
         ${l.dailyVol ? `<span class="muted">Il s'en vend ${fmt(l.dailyVol)} par jour à ${esc(l.sellVenue)} : ta quantité = ${Math.max(1, Math.round(l.n * l.amount / l.dailyVol * 100))} % d'une journée de ventes</span>` : ''}
@@ -324,14 +333,29 @@
     $('#k-locked') && ($('#k-locked').textContent = locked ? `${fmtK(locked)} bloqués dans ${open.length} vente${open.length > 1 ? 's' : ''} en cours` : '');
     if (!log.length) { $('#progress').innerHTML = ''; box.innerHTML = '<p class="muted">Rien en cours. Quand tu as acheté et mis en vente une ligne, clique « Mis en vente » : elle apparaît ici. Quand tout est vendu, indique l\'argent reçu : l\'outil mesure ton profit réel et ton délai de vente.</p>'; $('#log-sum').textContent = ''; return; }
     let sum = '';
+    const caps = store.get('ae.capital.' + profiles.active, []);
     if (sold.length) {
       const days = new Set(sold.map(r => r.soldAt.slice(0, 10))).size;
       const real = sold.reduce((s, r) => s + r.real, 0), exp = sold.reduce((s, r) => s + r.expected, 0);
       const delay = sold.reduce((s, r) => s + r.delayH, 0) / sold.length;
       sum = `<b>${fmtK(real / days)}</b> de profit réel par jour (${days} jour${days > 1 ? 's' : ''} de ventes) · réalisé ${exp ? Math.round(real / exp * 100) : 0} % du prévu · délai de vente moyen <b>${delay < 24 ? Math.round(delay) + ' h' : (delay / 24).toFixed(1).replace('.', ',') + ' j'}</b>`;
+      // Rendement réel et capital cible pour l'objectif quotidien (donnée du joueur, profil)
+      const p = prof(), goal = p.goalPerDay || 0;
+      const capVals = caps.map(c => Math.max(0, c.v - (p.reserve || 0))).filter(v => v > 0);
+      const capBase = capVals.length ? capVals.reduce((a, b) => a + b, 0) / capVals.length : Math.max(0, (p.bank || 0) - (p.reserve || 0));
+      const r = capBase > 0 ? real / days / capBase : 0;
+      if (goal > 0 && r > 0 && days >= 3) {
+        const target = goal / r, cur = Math.max(0, (p.bank || 0) - (p.reserve || 0));
+        let eta = '';
+        if (caps.length >= 2) {
+          const d0 = Date.parse(caps[0].d), d1 = Date.parse(caps[caps.length - 1].d), wks = (d1 - d0) / (7 * 864e5);
+          const g = wks >= 1 ? (caps[caps.length - 1].v - caps[0].v) / wks : 0;
+          eta = target > cur ? (g > 0 ? ` · à ton rythme actuel (+${fmtK(g)} par semaine) : environ <b>${Math.ceil((target - cur) / g)} semaine(s)</b>` : ' · ton argent ne progresse pas encore d\'une semaine sur l\'autre') : ' · <b>objectif atteignable avec ton capital actuel</b>';
+        }
+        sum += `<br>Rendement réel <b>${(r * 100).toFixed(1).replace('.', ',')} % par jour</b> · pour ${fmtK(goal)} par jour il faudrait environ <b>${fmtK(target)}</b> de capital (tu as ${fmtK(cur)})${eta}. <span class="muted">Le rendement baisse souvent quand le capital grossit : la cible se recale chaque semaine.</span>`;
+      } else if (goal > 0) sum += `<br><span class="muted">Rendement réel et capital cible : affichés après 3 jours de ventes notées.</span>`;
     }
     // Progression semaine par semaine (argent disponible relevé dans le profil + ce qui est en vente)
-    const caps = store.get('ae.capital.' + profiles.active, []);
     const wk = d => { const t = new Date(d + 'T00:00:00Z'); const day = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - day); return t.toISOString().slice(0, 10); };
     const weeks = {};
     caps.forEach(c => { const w = wk(c.d); (weeks[w] = weeks[w] || { first: c.v, last: c.v }); weeks[w].last = c.v; });
@@ -358,7 +382,7 @@
     $('#pf-select').innerHTML = Object.keys(profiles.list).map(n => `<option ${n === profiles.active ? 'selected' : ''}>${esc(n)}</option>`).join('');
     $('#pf-premium').checked = !!p.premium;
     $('#pf-focus').value = p.focus; $('#pf-bank').value = p.bank; $('#pf-reserve').value = p.reserve;
-    $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes;
+    $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes; $('#pf-goal').value = p.goalPerDay ?? '';
     $('#pf-multi').checked = !!p.multiCity; $('#pf-risky').checked = !!p.riskyOuting; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-brecmin').value = p.brecilienMinutes ?? ''; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = p.travelMult ?? 1;
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
@@ -385,7 +409,7 @@
       premium: $('#pf-premium').checked, focus: +$('#pf-focus').value || 0, bank: +$('#pf-bank').value || 0,
       reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value,
       multiCity: $('#pf-multi').checked, riskyOuting: $('#pf-risky').checked, salvageRound: $('#pf-salvround').value,
-      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, brecilienMinutes: $('#pf-brecmin').value === '' ? null : +$('#pf-brecmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45,
+      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, brecilienMinutes: $('#pf-brecmin').value === '' ? null : +$('#pf-brecmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45, goalPerDay: +$('#pf-goal').value || 0,
       cities: $$('#pf-cities input:checked').map(i => i.value), families: $$('#pf-families input:checked').map(i => i.value),
       stationFee: Object.fromEntries($$('[data-fee]').filter(i => i.value !== '').map(i => [i.dataset.fee, +i.value])),
       dailyBonus: Object.fromEntries($$('[data-daily]').filter(i => i.value !== '' && +i.value > 0)
@@ -394,6 +418,7 @@
       maxShare: (+$('#pf-maxShare').value || 25) / 100, minMargin: (+$('#pf-minMargin').value || 0) / 100,
       minutesPerLine: +$('#pf-minutesPerLine').value || 5, minLineProfit: +$('#pf-minLineProfit').value || 0,
     });
+    if (prof().bank !== prevBank) updateProf({ bankAt: new Date().toISOString() });
     if (prof().bank !== prevBank && prof().bank > 0) { snapCapital(prof().bank); renderLog(); }
     feeWarning();
   }
