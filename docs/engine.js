@@ -644,6 +644,67 @@
                minutesUsed: prof.minutes - minutes, route: [...visited] };
     }
 
+    /* ---------- Progression des spés : crafts sans focus, petit budget ---------- */
+    // Tier que tu peux crafter : niveau du nœud de base de l'objet (Destiny Board) et table UnlockTier officielle.
+    const BASE_TPL = new Set(['CRAFT_BASE', 'CRAFT_OFF', 'FARM_BASE']);
+    function nodesOf(idx) { return ((DATA.bonus || {})[idx] || []).map(([ni]) => ni).filter((v, i, a) => a.indexOf(v) === i); }
+    function tierCap(idx, prof) {
+      let cap = null;
+      for (const ni of nodesOf(idx)) {
+        const nd = DATA.nodes[ni]; if (!BASE_TPL.has(nd.m)) continue;
+        const tab = (DATA.unlock || {})[nd.m]; if (!tab) continue;
+        const L = Math.max(1, (prof.specs && prof.specs[nd.id]) || 0);   // niveau 0 d'un nœud ouvert : T4
+        let t = 0; for (const [lvl, tier] of tab) if (L >= lvl) t = Math.max(t, tier);
+        cap = Math.max(cap || 0, t);
+      }
+      return cap;
+    }
+    // Nœuds que ce craft fait progresser et qui ne sont pas au maximum (100)
+    function nodesToLevel(idx, prof) {
+      return nodesOf(idx).map(ni => DATA.nodes[ni]).filter(nd => ((prof.specs && prof.specs[nd.id]) || 0) < 100)
+        .map(nd => ({ id: nd.id, name: nd.n, level: (prof.specs && prof.specs[nd.id]) || 0 }));
+    }
+    // Étape 1 (prix seulement) : meilleurs crafts sans focus qui montent une spé non maximale, au tier débloqué.
+    // Renommée : proportionnelle à la valeur d'objet du jeu (FameGainFactors, gamedata) — mesure relative.
+    function progressionCandidates(prices, prof, limit) {
+      const cands = [];
+      const cities = prof.cities && prof.cities.length ? prof.cities : CITIES;
+      items.forEach((item, idx) => {
+        if (!item.tr || !item.r || !item.v) return;
+        const cap = tierCap(idx, prof); if (cap == null || item.t > cap) return;
+        const lv = nodesToLevel(idx, prof); if (!lv.length) return;
+        let best = null;
+        for (const city of cities) for (const rec of item.r) {
+          if (rec[3] !== 0) continue;
+          const o = evaluate(prices, idx, rec, 0, city, false, prof);
+          if (!o || !(o.cost > 0)) continue;
+          const score = o.profit >= 0 ? 1e9 + item.v : item.v / -o.profit;   // renommée par argent perdu
+          if (!best || score > best.score) best = Object.assign(o, { score, prog: true, levels: lv, fameValue: item.v });
+        }
+        if (best) cands.push(withTrips(best, prof));
+      });
+      return cands.sort((a, b) => b.score - a.score).slice(0, limit || 150);
+    }
+    // Étape 2 (avec les ventes des 7 jours) : quantités vendables, budget = part du capital, 3 lignes au plus.
+    function progressionPick(cands, volumes, prof, budget) {
+      const out = []; let left = budget;
+      const H = (id, c) => { const h = volumes[id] && volumes[id][c]; return h && typeof h === 'object' ? h : null; };
+      for (const o of cands) {
+        if (out.length >= 3 || left <= 0) break;
+        const h = H(o.id, o.sellVenue); if (!h || !(h.n > 0)) continue;
+        if (o.ingredients.some(l => { const x = H(l.id, l.city || o.city); return !x || !(x.n > 0); })) continue;
+        let n = Math.floor(h.n * prof.liqShare / o.amount);
+        for (const l of o.ingredients) if (l.effQty > 0) n = Math.min(n, Math.floor((volN(volumes[l.id] && volumes[l.id][l.city || o.city]) * prof.liqShare - (l.start || 0)) / l.effQty));
+        const stock = startCapital(o);
+        n = Math.min(n, Math.floor((left - stock) / o.cost));
+        if (n <= 0) continue;
+        left -= n * o.cost + stock;
+        out.push(Object.assign({}, o, { n, stockCost: stock, totalCost: n * o.cost + stock, totalProfit: n * o.profit, totalFocus: 0,
+          fame: n * o.amount * o.fameValue, kindLabel: 'Progression', minutes: prof.minutesPerLine || 5 }));
+      }
+      return out;
+    }
+
     /* ---------- Tournée : actions regroupées par ville, ordre qui minimise les déplacements ---------- */
     // Chaque ligne = achats (une action par ville d'achat) → fabrication / recyclage (ville de craft) → vente(s).
     // Recherche à coût uniforme sur (ville, actions faites) : à chaque arrêt on fait tout ce qui est faisable.
@@ -724,7 +785,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, sellByOrder, buyByOrder, applyHistory, tcost, tpCost, buyQty, startCapital, route, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, sellByOrder, buyByOrder, applyHistory, tcost, tpCost, buyQty, startCapital, route, tierCap, nodesToLevel, progressionCandidates, progressionPick, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

@@ -65,6 +65,7 @@ button{font:600 1rem var(--f-body);border-radius:8px;cursor:pointer}
 .stop h4{margin:0 0 6px;font-size:1.05rem}
 .tasks{margin:0;padding-left:18px;display:grid;gap:5px}
 .go{margin:8px 0 0;font-size:.92rem}
+.line .gain b.neg{color:var(--neg)}
 .gainmini{color:var(--pos);font-family:var(--f-num);font-size:.85rem}
 button.small{padding:2px 8px;font-size:.8rem;margin-left:6px}
 details.detail>summary,details.risky>summary{cursor:pointer;margin:6px 0 10px}
@@ -169,6 +170,7 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
     <label class="field"><span>Focus disponible</span><input type="number" id="pf-focus" min="0" max="30000"></label>
     <label class="field"><span>Temps pour l'économie (minutes)</span><input type="number" id="pf-minutes" min="5"></label>
     <label class="field"><span>Objectif de profit par jour</span><input type="number" min="0" step="100000" id="pf-goal"></label>
+    <label class="field"><span>Progression des spés : % du capital (crafts sans focus)</span><input type="number" min="0" max="50" id="pf-prog"></label>
     <label class="field"><span>Achat et vente</span><select id="pf-mode"><option value="mixed">Achat direct, vente par ordre (conseillé : la tournée se fait d'une traite)</option><option value="instant">Directs (immédiat)</option><option value="orders">Achat et vente par ordres (les achats peuvent prendre des heures)</option></select></label>
     <label class="chip" style="align-self:end"><input type="checkbox" id="pf-premium"> Premium actif</label>
   </div></div>
@@ -221,12 +223,12 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
     <li><b>Hypothèses à mesurer</b> : frais de station (valeur d'objet × 0,1125 × prix), rendement des travailleurs, minutes par ligne. Le journal des résultats remplace peu à peu ces hypothèses par tes chiffres réels.</li>
   </ul>
 </section>
-  <p class="muted small" style="margin-top:40px">Version 20261010-0551</p>
+  <p class="muted small" style="margin-top:40px">Version 20261010-0554</p>
 </main>
-<script src="data.js?v=20261010-0551"></script>
-<script src="preset.js?v=20261010-0551"></script>
-<script src="engine.js?v=20261010-0551"></script>
-<script src="market.js?v=20261010-0551"></script>
-<script src="app.js?v=20261010-0551"></script>
+<script src="data.js?v=20261010-0554"></script>
+<script src="preset.js?v=20261010-0554"></script>
+<script src="engine.js?v=20261010-0554"></script>
+<script src="market.js?v=20261010-0554"></script>
+<script src="app.js?v=20261010-0554"></script>
 </body>
 </html>

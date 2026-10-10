@@ -13,3 +13,6 @@
 | 2026-10-07 | Ventes suivies en deux temps (mis en vente, vendu) : délai de vente mesuré, pas supposé | Clos |
 | 2026-10-07 | La réserve de 10 M (stuff) n'est jamais engagée, y compris en journée | Clos |
 | 2026-10-07 | Recettes sans station (Mains noires, artefacts à 50 runes) exclues tant qu'une station n'est pas confirmée en jeu | Ouvert |
+| 2026-10-10 | Mode par défaut « mixte » : achat direct, vente par ordre (la tournée se fait d'une traite) | Clos |
+| 2026-10-10 | Capital disponible = banque − réserve − lignes mises en vente depuis la dernière saisie de la banque | Clos |
+| 2026-10-10 | Progression des spés : jusqu'à 5 % du capital (réglable) en crafts sans focus, au tier débloqué, objets qui se vendent, nœuds < 100 ; 3 lignes max | Clos |

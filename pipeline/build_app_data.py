@@ -144,7 +144,7 @@ def group_of(i):
     c = chain(i)
     k = next((j for j, x in enumerate(c) if x in ('CRAFT_TRAINEE', 'FARM_TRAINEE')), None)
     return c[min(k + 2, len(c) - 1)] if k is not None else c[-1]
-node_list = [{'id': n['id'], 'n': loc.get(n['id']) or n['id'], 'g': n['categorie'],
+node_list = [{'id': n['id'], 'n': loc.get(n['id']) or n['id'], 'g': n['categorie'], 'm': n['modele'],
               'grp': group_of(n['id']), 'gn': loc.get(group_of(n['id'])) or group_of(n['id'])} for n in nodes]
 TYPE = {'craftingfocuscostreduction': 'f', 'farmingfocuscostreduction': 'a', 'itemcraftquality': 'q'}
 # bonus[itemIndex] = [[nodeIndex, points_par_niveau, type], ...]  (points = valeur x 100, cf. rapport)
@@ -163,6 +163,18 @@ for ni, n in enumerate(nodes):
                     it = objets[mid]
                     if tmin <= it['tier'] <= tmax:
                         bonus[index[mid]].append([ni, round(b['valeur_par_niveau'] * 100, 4), TYPE[b['type']]])
+
+# ---------- Tier débloqué selon le niveau du nœud de base (colonne UnlockTier des modèles officiels) ----------
+unlock = {}
+for t in json.load(open(os.path.join(DUMP, 'achievements.json'), encoding='utf-8'))['achievements']['template']:
+    bl = t.get('baselevels')
+    if not bl: continue
+    cols = bl['@structure'].split(';')
+    if 'UnlockTier' not in cols: continue
+    ui = cols.index('UnlockTier')
+    rows = [r.strip().split(';') for r in bl.get('#text', '').strip().splitlines() if r.strip()]
+    tab = [[i + 1, int(r[ui])] for i, r in enumerate(rows) if len(r) > ui and r[ui]]
+    if tab: unlock[t['@name']] = tab
 
 # ---------- Bonus de lieux (villes royales uniquement) ----------
 CITIES = ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien']
@@ -191,7 +203,7 @@ def dump_version():
 
 data = {
     'version': dump_version(),
-    'items': items, 'nodes': node_list, 'bonus': {str(k): v for k, v in bonus.items()},
+    'unlock': unlock, 'items': items, 'nodes': node_list, 'bonus': {str(k): v for k, v in bonus.items()},
     'cities': {c: {'raff': lieux[c]['bonus_raffinage'], 'craft': lieux[c]['bonus_craft'], 'spe': lieux[c]['specialites']} for c in CITIES if c in lieux},
     'farm': farm, 'farmBonus': farm_bonus, 'laborers': J('travailleurs.json'), 'journals': J('carnets.json'),
     'houses': J('maisons.json'), 'npc': J('pnj_prix_fixe.json'), 'consts': consts,

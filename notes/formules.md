@@ -15,6 +15,9 @@ Rapport complet : document « Économie d'Albion Online — fonctionnement compl
 | Frais de station | valeur d'objet × 0,1125 × prix pour 100 de nutrition / 100 | **Hypothèse** | gamedata ItemValueToNutrition |
 | Valeur d'objet | matériau : 2^(tier + enchant.) ; objet fabriqué : Σ valeurs des ingrédients / quantité produite | Officielle + formule tierce recoupée | items.json ; albionfreemarket.com |
 | Travel Planner | voyage : gratuit, temps de trajet (donnée du joueur) ; téléportation, par objet : ceil(poids × fasttravelfactor × 150 × multiplicateur serveur) × distance ; distance 1 entre villes royales voisines (anneau TH–FS–LY–BW–MA), 2 sinon | Formule tierce ; poids et facteur officiels ; multiplicateur Europe **inconnu** (défaut 1) | albionfreemarket.com/teleport-calculator ; items.json (weight, fasttravelfactor) |
+| Tier craftable | niveau du nœud de base (CRAFT_BASE, CRAFT_OFF, FARM_BASE) → colonne UnlockTier : T5 au niv. 10, T6 à 30, T7 à 60, T8 à 100 (CRAFT_BASE) | Officielle | achievements.json (templates) |
+| Renommée de craft (progression) | mesure **relative** : proportionnelle à la valeur d'objet (FameGainFactors « itemvaluetofameprogressionfactor ») ; formule exacte **inconnue**, à recouper par une lecture en jeu | Hypothèse | gamedata FameGainFactors |
+| Prix d'achat prudent | max(prix actuel, prix moyen payé sur 7 jours) : l'API ne donne pas la profondeur du carnet | Choix de prudence | API AODP history |
 | Travailleurs | butin = quantité de base × chances officielles d'enchantement | Officielle ; effet du bonheur **inconnu** | items.json (journalitem) |
 
 ## Inconnues à mesurer en jeu

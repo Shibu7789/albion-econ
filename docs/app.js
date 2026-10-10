@@ -51,7 +51,7 @@
   const DEFAULT_PROFILE = {
     name: 'Principal', premium: false, focus: 0, bank: 0, reserve: 10000000,
     cities: ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'],
-    multiCity: true, riskyOuting: false, travelMult: 1, travelMinutes: 5, mode: 'mixed', goalPerDay: 5000000, families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
+    multiCity: true, riskyOuting: false, travelMult: 1, travelMinutes: 5, mode: 'mixed', goalPerDay: 5000000, progressShare: 0.05, families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
     maxAge: 12, liqShare: 0.15, maxShare: 0.25, minMargin: 0.05, minutes: 45, minutesPerLine: 5,
     minLineProfit: 10000, stationFee: {}, dailyBonus: {}, specs: {},
   };
@@ -161,13 +161,22 @@
       }
       for (const o of oppsBM) { if (keepBM.size >= 300) break; keepBM.add(o.id); }
       const top = opps.filter(o => keep.has(o.id)), topBM = oppsBM.filter(o => keepBM.has(o.id));
+      // Progression des spés : crafts sans focus, part du capital (profil)
+      const progC = (p.progressShare || 0) > 0 ? E.progressionCandidates(prices, pDay, 150) : [];
       const vNeed = new Set();
-      top.concat(topBM).forEach(o => { vNeed.add(o.id); o.ingredients.forEach(l => vNeed.add(l.id)); (o.outputs || []).forEach(x => vNeed.add(x.id)); });
+      top.concat(topBM, progC).forEach(o => { vNeed.add(o.id); o.ingredients.forEach(l => vNeed.add(l.id)); (o.outputs || []).forEach(x => vNeed.add(x.id)); });
       setStatus(`Lecture des ventes des 7 derniers jours : ${vNeed.size} objets…`);
       const volumes = await M.fetchVolumes([...vNeed], locs, { onProgress: (d, t) => setStatus(`Lecture des ventes des 7 derniers jours… ${d}/${t}`) });
       lastPrices = prices; lastVolumes = volumes;
       const checked = E.applyHistory(top, volumes, prices, pDay).sort((a, b) => b.profit - a.profit);
-      lastPlan = E.plan(checked, volumes, pDay);
+      const prog = E.progressionPick(progC, volumes, pDay, pDay.capital * (p.progressShare || 0));
+      const progCost = prog.reduce((s, l) => s + l.totalCost, 0);
+      const progMin = prog.length * (p.minutesPerLine || 5);
+      lastPlan = E.plan(checked, volumes, Object.assign({}, pDay, { capital: Math.max(0, pDay.capital - progCost), minutes: Math.max(0, pDay.minutes - progMin) }));
+      lastPlan.lines = lastPlan.lines.concat(prog);
+      lastPlan.totalProfit += prog.reduce((s, l) => s + l.totalProfit, 0);
+      lastPlan.capitalUsed += progCost; lastPlan.minutesUsed += progMin;
+      lastPlan.progCount = prog.length;
       const checkedBM = E.applyHistory(topBM, volumes, prices, pBM).sort((a, b) => b.profit - a.profit);
       // sortie hebdomadaire : quantités sur 7 jours de volume, pas de limite de temps de session
       // calcul à part : n'entame ni le capital ni le focus ni le temps de la liste du jour
@@ -204,7 +213,7 @@
     $('#k-route').textContent = pl.route && pl.route.length ? 'Tournée : ' + pl.route.join(' → ') + ' · ' + fmtK(pl.totalProfit / Math.max(1, pl.minutesUsed)) + ' par minute' : '';
     $('#k-at').textContent = new Date(pl.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
     const byCity = {};
-    pl.lines.forEach((l, i) => { const g = (l.flip ? 'Revente — acheter à ' : l.salvage ? 'Recyclage — acheter à ' : 'Crafter à ') + l.city; (byCity[g] = byCity[g] || []).push([l, i]); });
+    pl.lines.forEach((l, i) => { const g = (l.prog ? 'Progression des spés — crafter à ' : l.flip ? 'Revente — acheter à ' : l.salvage ? 'Recyclage — acheter à ' : 'Crafter à ') + l.city; (byCity[g] = byCity[g] || []).push([l, i]); });
     const p = prof();
     const bm = p.riskyOuting && pl.bm && pl.bm.lines.length ? `<details class="city risky"><summary><h3 style="display:inline">Option : sortie risquée <span class="muted">Caerleon, Black Market · en groupe, une fois par semaine</span></h3></summary>
       <p class="muted small">Hors liste du jour : ces lignes ne comptent ni dans ton capital engagé, ni dans ton profit prévu. Ne les fais qu'avec l'argent qui reste après ta liste du jour. Quantités calculées sur une semaine de ventes. Seraient engagés : ${fmtK(pl.bm.capitalUsed)} pour ${fmtK(pl.bm.totalProfit)} prévus.</p>
@@ -217,6 +226,7 @@
 
   // Tournée : une liste de tâches par ville, dans l'ordre qui évite les allers-retours
   const tierOf = id => { const it = DATA.items[E.index.get(id)]; return it ? ` <span class="tier">T${it.t}${it.e ? '.' + it.e : ''}</span>` : ''; };
+  const signK = v => (v >= 0 ? '+' : '−') + fmtK(Math.abs(v));
   const sellPrice = (l, p) => l.unitSell / (1 - E.salesTax(p) - (E.sellByOrder(p) && l.sellVenue !== 'Black Market' ? DATA.consts.setupFee : 0));
   const ORDER = { buy: 0, make: 1, salvage: 1, sell: 2 };
   function tourHTML(pl, p) {
@@ -231,12 +241,12 @@
       if (a.type === 'make') {
         const pre = l.chain && l.chain.length ? l.chain.map(st => `${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'} <span class="q">${fmt(Math.ceil(st.qty * l.n + (st.start || 0) - 1e-9))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span>${st.focus ? ' au focus' : ''}`).join(', puis ') + ', puis ' : '';
         const verb = l.kind === 3 ? 'Améliorer' : l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter';
-        return `<li>${pre ? '<span class="muted">' + pre + '</span>' : ''}<b>${verb}</b> <span class="q">${fmt(l.n)}</span> × ${name(l)}${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}</li>`;
+        return `<li>${pre ? '<span class="muted">' + pre + '</span>' : ''}<b>${verb}</b> <span class="q">${fmt(l.n)}</span> × ${name(l)}${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}${l.prog ? ` <span class="muted">· sans focus, monte ${esc(l.levels[0].name)}</span>` : ''}</li>`;
       }
       const bm = a.city === 'Black Market';
       const verb = E.sellByOrder(p) && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
       if (a.outputs) return '';                                // regroupés par objet (voir outRows)
-      return `<li><b>${verb}</b> <span class="q">${fmt(l.n * l.amount)}</span> × ${name(l)} <span class="muted">à ${fmt(sellPrice(l, p))}</span> <span class="gainmini">+${fmtK(l.totalProfit)}</span> <button class="ghost real small" data-start="${i}">Mis en vente</button></li>`;
+      return `<li><b>${verb}</b> <span class="q">${fmt(l.n * l.amount)}</span> × ${name(l)} <span class="muted">à ${fmt(sellPrice(l, p))}</span> <span class="gainmini${l.totalProfit < 0 ? ' neg' : ''}">${signK(l.totalProfit)}</span>${l.prog ? ' <span class="pill">progression</span>' : ''} <button class="ghost real small" data-start="${i}">Mis en vente</button></li>`;
     };
     // achats d'un même objet pour plusieurs lignes : une seule ligne, quantité totale, prix max le plus bas
     function buyRows(st) {
@@ -284,7 +294,8 @@
     return `<article class="line" data-i="${i}">
       <header><label class="chk"><input type="checkbox" id="done-${i}"> <span class="kind">${esc(l.kindLabel)}</span></label>
         <h4>${esc(l.name)} <span class="tier">T${l.tier}${ench}</span></h4>
-        <div class="gain"><b>+${fmtK(l.totalProfit)}</b><span class="muted">${l.perMinute ? fmtK(l.perMinute) + ' / min · ' : ''}marge ${Math.round(l.margin * 100)} %</span></div></header>
+        <div class="gain"><b class="${l.totalProfit < 0 ? 'neg' : ''}">${signK(l.totalProfit)}</b><span class="muted">${l.perMinute ? fmtK(l.perMinute) + ' / min · ' : ''}marge ${Math.round(l.margin * 100)} %</span></div></header>
+      ${l.prog ? `<p class="muted small">Sans focus, pour monter : ${l.levels.slice(0, 3).map(x => esc(x.name) + ' (niv. ' + x.level + ')').join(', ')}. ${l.totalProfit < 0 ? 'Coût de la progression : ' + fmtK(-l.totalProfit) + '.' : 'Rentable en plus.'}</p>` : ''}
       <ol class="steps">
         <li><b>${buyVerb}</b><ul>${ings}</ul></li>
         ${l.chain && l.chain.length ? `<li><b>Préparer d'abord</b> <span class="muted">moins cher que d'acheter</span><ul>${l.chain.map(st => `<li>${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'}${st.focus ? ' <b>au focus</b>' : ''} <span class="q">${fmt(Math.ceil(st.qty * l.n + (st.start || 0) - 1e-9))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span></li>`).join('')}</ul></li>` : ''}
@@ -382,7 +393,7 @@
     $('#pf-select').innerHTML = Object.keys(profiles.list).map(n => `<option ${n === profiles.active ? 'selected' : ''}>${esc(n)}</option>`).join('');
     $('#pf-premium').checked = !!p.premium;
     $('#pf-focus').value = p.focus; $('#pf-bank').value = p.bank; $('#pf-reserve').value = p.reserve;
-    $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes; $('#pf-goal').value = p.goalPerDay ?? '';
+    $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes; $('#pf-goal').value = p.goalPerDay ?? ''; $('#pf-prog').value = Math.round((p.progressShare ?? 0) * 100);
     $('#pf-multi').checked = !!p.multiCity; $('#pf-risky').checked = !!p.riskyOuting; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-brecmin').value = p.brecilienMinutes ?? ''; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = p.travelMult ?? 1;
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
@@ -409,7 +420,7 @@
       premium: $('#pf-premium').checked, focus: +$('#pf-focus').value || 0, bank: +$('#pf-bank').value || 0,
       reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value,
       multiCity: $('#pf-multi').checked, riskyOuting: $('#pf-risky').checked, salvageRound: $('#pf-salvround').value,
-      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, brecilienMinutes: $('#pf-brecmin').value === '' ? null : +$('#pf-brecmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45, goalPerDay: +$('#pf-goal').value || 0,
+      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, brecilienMinutes: $('#pf-brecmin').value === '' ? null : +$('#pf-brecmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45, goalPerDay: +$('#pf-goal').value || 0, progressShare: Math.max(0, Math.min(50, +$('#pf-prog').value || 0)) / 100,
       cities: $$('#pf-cities input:checked').map(i => i.value), families: $$('#pf-families input:checked').map(i => i.value),
       stationFee: Object.fromEntries($$('[data-fee]').filter(i => i.value !== '').map(i => [i.dataset.fee, +i.value])),
       dailyBonus: Object.fromEntries($$('[data-daily]').filter(i => i.value !== '' && +i.value > 0)

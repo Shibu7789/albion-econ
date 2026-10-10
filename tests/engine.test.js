@@ -333,4 +333,25 @@ t('tournée : actions groupées par ville, ordre au plus court, achats avant cra
   assert.ok(order.indexOf('1buy') < order.indexOf('1sell'), 'B dans l\'ordre');
   assert.ok(r.stops.every(s => s.actions.every(a => a.city === s.city)), 'chaque action dans sa ville');
 });
+t('progression : tier débloqué par le nœud de base (table UnlockTier officielle)', () => {
+  const tab = DATA.unlock.CRAFT_BASE;
+  assert.deepStrictEqual(tab.map(x => x[1]), [4, 5, 6, 7, 8]);
+  const idx = E.index.get('T8_MAIN_CURSEDSTAFF'), idx6 = E.index.get('T6_MAIN_CURSEDSTAFF');
+  const base = DATA.nodes.find(nd => nd.id === 'CRAFT_CURSEDSTAFFS');
+  assert.strictEqual(base.m, 'CRAFT_BASE');
+  const lvl30 = tab.find(x => x[1] === 6)[0];
+  assert.strictEqual(E.tierCap(idx6, { specs: { CRAFT_CURSEDSTAFFS: lvl30 } }), 6);
+  assert.strictEqual(E.tierCap(idx6, { specs: { CRAFT_CURSEDSTAFFS: lvl30 - 1 } }), 5);
+  assert.strictEqual(E.tierCap(idx, { specs: { CRAFT_CURSEDSTAFFS: 100 } }), 8);
+});
+t('progression : budget respecté, objets vendus seulement, nœuds non maximaux', () => {
+  const lv = E.nodesToLevel(E.index.get('T6_MAIN_CURSEDSTAFF'), { specs: { CRAFT_CURSEDSTAFFS: 100, CRAFT_CURSEDSTAFFS_CURSED: 40 } });
+  assert.ok(lv.some(x => x.id === 'CRAFT_CURSEDSTAFFS_CURSED') && !lv.some(x => x.id === 'CRAFT_CURSEDSTAFFS'));
+  const o = { id: 'P', city: 'Lymhurst', sellVenue: 'Lymhurst', amount: 1, cost: 1000, profit: -100, fameValue: 50,
+    ingredients: [{ id: 'I', city: 'Lymhurst', effQty: 2, start: 0, price: 500 }] };
+  const vol = { P: { Lymhurst: { n: 1000, p: 900 } }, I: { Lymhurst: { n: 1e5, p: 500 } } };
+  const pick = E.progressionPick([o], vol, Object.assign({}, prof, { liqShare: 0.15 }), 50000);
+  assert.strictEqual(pick[0].n, 50, 'budget 50 000 / 1 000');
+  assert.strictEqual(E.progressionPick([o], { I: vol.I }, prof, 50000).length, 0, 'sans ventes : écarté');
+});
 console.log(n, 'tests OK');
