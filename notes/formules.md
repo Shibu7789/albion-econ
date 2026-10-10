@@ -4,7 +4,7 @@ Rapport complet : document « Économie d'Albion Online — fonctionnement compl
 
 | Mécanique | Règle utilisée | Statut | Source |
 | --- | --- | --- | --- |
-| Retour de ressources | RRR = B / (1 + B) ; B = 18 % ville (raffinage et craft), +40 % raffinage ou +15 % craft en ville de spécialité, +59 % focus, + bonus du jour | Vérifiée (retrouve les 10 valeurs du wiki) | craftingmodifiers.json, gamedata ActionFocus ; wiki « Resource return rate » |
+| Retour de ressources | RRR = B / (1 + B), rendu APRÈS chaque craft : achat = recette complète du 1er craft + consommation nette des suivants ; B = 18 % ville (raffinage et craft), +40 % raffinage ou +15 % craft en ville de spécialité, +59 % focus, + bonus du jour | Vérifiée (retrouve les 10 valeurs du wiki) | craftingmodifiers.json, gamedata ActionFocus ; wiki « Resource return rate » |
 | Ingrédients non rendus | `maxreturnamount = 0` dans la recette | Officielle | items.json |
 | Coût de focus | base × 0,5^(FCE / 10 000) | Officielle (constante 1,00695555 / 100 points) | gamedata ActionFocus ; wiki « Focus » |
 | Efficacité de focus (FCE) | Σ niveau × points par niveau de chaque nœud du Destiny Board couvrant l'objet (points = valeur × 100) | Officielle ; recoupée (max = 40 000 → 6,25 % ; arrosage 1 000 → 125) | achievements.json |

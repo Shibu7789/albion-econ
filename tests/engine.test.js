@@ -308,4 +308,16 @@ t('Travel Planner : voyage gratuit (temps) ou téléportation (frais au poids), 
   const no = E.plan([mk(fee * 10)], vol, Object.assign({}, base, { teleport: false })).lines[0];
   assert.strictEqual(no.transport, 'voyage');
 });
+t('retour de ressources : il faut le stock complet du 1er craft, le retour arrive après', () => {
+  const o = E.evaluate(prices, i5, rec, 1, 'Lymhurst', false, prof);
+  const fib = o.ingredients.find(g => g.id === 'T5_FIBER'), R = o.rrr;
+  near(fib.start, 3 * R, 1e-9, 'part rendue d\'un craft');
+  assert.strictEqual(E.buyQty(fib, 1), 3, 'un craft : la recette entière');
+  assert.strictEqual(E.buyQty(fib, 8), Math.ceil(3 + 7 * 3 * (1 - R) - 1e-9), '8 crafts : 1er complet, puis net');
+  const pl = E.plan([o], { T5_CLOTH: { Lymhurst: 1e4 }, T5_FIBER: { Lymhurst: 1e5 }, T4_CLOTH: { Lymhurst: 1e5 } },
+    Object.assign({}, prof, { capital: 1e9, maxShare: 1, liqShare: 0.001, minutes: 45, minLineProfit: 0 }));
+  const l = pl.lines[0];
+  near(l.totalCost, l.n * o.cost + E.startCapital(o), 1e-6, 'capital : stock de départ compris');
+  assert.ok(l.stockCost > 0);
+});
 console.log(n, 'tests OK');

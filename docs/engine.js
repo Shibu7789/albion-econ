@@ -174,10 +174,11 @@
           if (!u) { ok = false; break; }
           cost += eff * u.cost;
           focus += eff * (u.focus || 0);
-          if (u.buy) leaves.push({ id: items[ii].id, name: items[ii].n, price: u.buy.raw, city: u.buy.city, effQty: eff });
+          const extra = noret ? 0 : qty * R;      // part rendue après coup : il faut l'avoir pour lancer le 1er craft
+          if (u.buy) leaves.push({ id: items[ii].id, name: items[ii].n, price: u.buy.raw, city: u.buy.city, effQty: eff, start: extra });
           else {
-            u.leaves.forEach(l => leaves.push(Object.assign({}, l, { effQty: l.effQty * eff })));
-            u.steps.forEach(st => steps.push(Object.assign({}, st, { qty: st.qty * eff })));
+            u.leaves.forEach(l => leaves.push(Object.assign({}, l, { effQty: l.effQty * eff, start: (l.start || 0) + extra * l.effQty })));
+            u.steps.forEach(st => steps.push(Object.assign({}, st, { qty: st.qty * eff, start: (st.start || 0) + extra * st.qty })));
           }
         }
         if (!ok) continue;
@@ -197,14 +198,20 @@
     // regroupe les achats identiques (même objet, même ville) et les étapes identiques
     function mergeLines(lines) {
       const m = new Map();
-      for (const l of lines) { const k = l.id + '|' + l.city; const x = m.get(k); if (x) { x.effQty += l.effQty; x.qty += l.qty; } else m.set(k, Object.assign({}, l)); }
+      for (const l of lines) { const k = l.id + '|' + l.city; const x = m.get(k); if (x) { x.effQty += l.effQty; x.qty += l.qty; x.start = (x.start || 0) + (l.start || 0); } else m.set(k, Object.assign({}, l)); }
       return [...m.values()];
     }
     function mergeSteps(steps) {
       const m = new Map();
-      for (const st of steps) { const x = m.get(st.id); if (x) x.qty += st.qty; else m.set(st.id, Object.assign({}, st)); }
+      for (const st of steps) { const x = m.get(st.id); if (x) { x.qty += st.qty; x.start = (x.start || 0) + (st.start || 0); } else m.set(st.id, Object.assign({}, st)); }
       return [...m.values()].sort((a, b) => a.tier - b.tier || a.ench - b.ench);
     }
+
+    // Quantité à acheter pour n crafts : le retour de ressources n'arrive qu'après chaque craft, donc il faut le
+    // stock complet du premier craft, puis la consommation nette pour les suivants (retours réutilisés).
+    // Il reste en fin de série environ « start » unités en stock (valeur conservée, comptée dans le capital immobilisé).
+    function buyQty(l, n) { return n > 0 ? Math.ceil(l.effQty * n + (l.start || 0) - 1e-9) : 0; }
+    function startCapital(o) { return o.ingredients.reduce((s, l) => s + (l.start || 0) * (l.price || 0), 0); }
 
     /* ---------- Évaluation d'une recette dans une ville ---------- */
     function stationFee(item, amount, city, prof) {
@@ -232,10 +239,11 @@
         if (!u) return null;
         cost += eff * u.cost;
         chainFocus += eff * (u.focus || 0);
-        if (u.buy) lines.push({ id: ing.id, name: ing.n, qty, price: u.buy.raw, city: u.buy.city, effQty: eff });
+        const extra = noret ? 0 : qty * R;        // le retour arrive APRÈS le craft : stock de départ nécessaire
+        if (u.buy) lines.push({ id: ing.id, name: ing.n, qty, price: u.buy.raw, city: u.buy.city, effQty: eff, start: extra });
         else {
-          u.leaves.forEach(l => lines.push(Object.assign({}, l, { qty: l.effQty * eff, effQty: l.effQty * eff })));
-          u.steps.forEach(st => chain.push(Object.assign({}, st, { qty: st.qty * eff })));
+          u.leaves.forEach(l => lines.push(Object.assign({}, l, { qty: l.effQty * eff, effQty: l.effQty * eff, start: (l.start || 0) + extra * l.effQty })));
+          u.steps.forEach(st => chain.push(Object.assign({}, st, { qty: st.qty * eff, start: (st.start || 0) + extra * st.qty })));
         }
       }
       cost += stationFee(item, amount, city, prof);
@@ -584,9 +592,9 @@
         let n = nMax;
         for (const l of o.ingredients) {
           if (l.effQty <= 0 || l.city === 'Île') continue;
-          n = Math.min(n, Math.floor(left[leftOf(l.id, l.city || o.city)] / l.effQty));
+          n = Math.min(n, Math.floor((left[leftOf(l.id, l.city || o.city)] - (l.start || 0)) / l.effQty));
         }
-        n = Math.min(n, Math.floor(Math.min(capital, capCap) / o.cost));
+        n = Math.min(n, Math.floor((Math.min(capital, capCap) - startCapital(o)) / o.cost));
         if (o.useFocus) n = Math.min(n, o.focus > 0 ? Math.floor(focus / o.focus) : n);
         return Math.max(0, n);
       }
@@ -605,7 +613,7 @@
             const n = size(o, nMax); if (n <= 0) continue;
             const P = n * o.profit; if (P < prof.minLineProfit) continue;
             const mins = minutesOf(o); if (mins > minutes) continue;
-            const score = P / Math.max(mins / Math.max(1, prof.minutes), (n * o.cost) / Math.max(1, prof.capital));
+            const score = P / Math.max(mins / Math.max(1, prof.minutes), (n * o.cost + startCapital(o)) / Math.max(1, prof.capital));
             if (!bestV || score > bestV.score) bestV = { o, n, P, mins, score };
           }
           if (!bestV) continue;
@@ -613,11 +621,12 @@
         }
         if (!pick) break;
         const { o, n, mins } = pick;
-        for (const l of o.ingredients) if (l.city !== 'Île') left[leftOf(l.id, l.city || o.city)] -= l.effQty * n;
-        chosen.push(Object.assign({}, o, { n, tpTotal: (o.tpUnit || 0) * n, totalCost: n * o.cost, totalProfit: n * o.profit, totalFocus: n * o.focus,
+        for (const l of o.ingredients) if (l.city !== 'Île') left[leftOf(l.id, l.city || o.city)] -= buyQty(l, n);
+        const stock = startCapital(o);
+        chosen.push(Object.assign({}, o, { n, tpTotal: (o.tpUnit || 0) * n, stockCost: stock, totalCost: n * o.cost + stock, totalProfit: n * o.profit, totalFocus: n * o.focus,
           minutes: mins, perMinute: n * o.profit / mins }));
         visited.add(o.city); (o.trips || []).forEach(c => visited.add(c));
-        capital -= n * o.cost; focus -= n * o.focus; minutes -= mins;
+        capital -= n * o.cost + stock; focus -= n * o.focus; minutes -= mins;
         byItem.delete(pick.id);
       }
       const total = chosen.reduce((s, l) => s + l.totalProfit, 0);
@@ -644,7 +653,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, applyHistory, tcost, tpCost, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, applyHistory, tcost, tpCost, buyQty, startCapital, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

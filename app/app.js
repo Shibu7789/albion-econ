@@ -195,14 +195,14 @@
     const bm = l.sellVenue === 'Black Market';
     const sellVerb = p.mode === 'orders' && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
     const ench = l.ench ? '.' + l.ench : '';
-    const ings = l.ingredients.map(g => `<li><span class="q">${fmt(Math.ceil(g.effQty * l.n))}</span> ${esc(g.name)} <span class="muted">à ${fmt(g.price)} max${g.city && g.city !== l.city ? ' · <b>' + esc(g.city) + '</b>' : ''}</span></li>`).join('');
+    const ings = l.ingredients.map(g => `<li><span class="q">${fmt(E.buyQty(g, l.n))}</span> ${esc(g.name)} <span class="muted">à ${fmt(g.price)} max${g.city && g.city !== l.city ? ' · <b>' + esc(g.city) + '</b>' : ''}</span></li>`).join('');
     return `<article class="line" data-i="${i}">
       <header><label class="chk"><input type="checkbox" id="done-${i}"> <span class="kind">${esc(l.kindLabel)}</span></label>
         <h4>${esc(l.name)} <span class="tier">T${l.tier}${ench}</span></h4>
         <div class="gain"><b>+${fmtK(l.totalProfit)}</b><span class="muted">${l.perMinute ? fmtK(l.perMinute) + ' / min · ' : ''}marge ${Math.round(l.margin * 100)} %</span></div></header>
       <ol class="steps">
         <li><b>${buyVerb}</b><ul>${ings}</ul></li>
-        ${l.chain && l.chain.length ? `<li><b>Préparer d'abord</b> <span class="muted">moins cher que d'acheter</span><ul>${l.chain.map(st => `<li>${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'}${st.focus ? ' <b>au focus</b>' : ''} <span class="q">${fmt(Math.ceil(st.qty * l.n))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span></li>`).join('')}</ul></li>` : ''}
+        ${l.chain && l.chain.length ? `<li><b>Préparer d'abord</b> <span class="muted">moins cher que d'acheter</span><ul>${l.chain.map(st => `<li>${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'}${st.focus ? ' <b>au focus</b>' : ''} <span class="q">${fmt(Math.ceil(st.qty * l.n + (st.start || 0) - 1e-9))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span></li>`).join('')}</ul></li>` : ''}
         ${l.kind === 5 ? `<li><b>Recycler</b> ${fmt(l.n)} objet${l.n > 1 ? 's' : ''}</li>
           <li><b>Vendre les matières</b><ul>${l.outputs.map(x => `<li><span class="q">${fmt(x.units * l.n)}</span> ${esc(x.name)} <span class="muted">${x.venue !== l.city ? '· <b>' + esc(x.venue) + '</b>' : ''}</span></li>`).join('')}</ul></li>`
           : l.kind === 4 ? (l.sellVenue === 'Black Market' ? `<li><b>Transporter</b> vers le Black Market (Caerleon)</li>` : '')
@@ -212,7 +212,7 @@
         ${moveHTML(l, p)}
         ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && !bm ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
       </ol>
-      <footer><span class="muted">Investissement ${fmtK(l.totalCost)} · ${fmt(l.minutes || p.minutesPerLine)} min dans ta tournée${l.trips && l.trips.length ? ' · villes : ' + [l.city].concat(l.trips).map(esc).join(', ') : ''}</span>
+      <footer><span class="muted">Investissement ${fmtK(l.totalCost)}${l.stockCost > 0 ? ` (dont ${fmtK(l.stockCost)} de stock de départ : le retour de ressources arrive après chaque craft, ce stock te reste à la fin)` : ''} · ${fmt(l.minutes || p.minutesPerLine)} min dans ta tournée${l.trips && l.trips.length ? ' · villes : ' + [l.city].concat(l.trips).map(esc).join(', ') : ''}</span>
         ${l.dailyVol ? `<span class="muted">Il s'en vend ${fmt(l.dailyVol)} par jour à ${esc(l.sellVenue)} : ta quantité = ${Math.max(1, Math.round(l.n * l.amount / l.dailyVol * 100))} % d'une journée de ventes</span>` : ''}
         <button class="ghost real" data-start="${i}">Mis en vente</button></footer></article>`;
   }
@@ -223,7 +223,7 @@
     const l = lastPlan && (String(i).startsWith('bm') ? lastPlan.bm && lastPlan.bm.lines[+String(i).slice(2)] : lastPlan.lines[i]); if (!l) return;
     const log = store.get(logKey(), []);
     log.push({ id: Date.now().toString(36), status: 'en vente', date: new Date().toISOString(), item: l.name + (l.ench ? ' .' + l.ench : ''),
-      city: l.city, venue: l.sellVenue, kind: l.kindLabel, n: l.n, qty: l.n * l.amount, cost: l.totalCost, expected: l.totalProfit, focus: l.totalFocus });
+      city: l.city, venue: l.sellVenue, kind: l.kindLabel, n: l.n, qty: l.n * l.amount, cost: l.totalCost - (l.stockCost || 0), expected: l.totalProfit, focus: l.totalFocus });
     store.set(logKey(), log);
     $('#done-' + i).checked = true;
     const b = $(`[data-start="${i}"]`); if (b) { b.disabled = true; b.textContent = 'En vente : suivi dans Résultats'; }
