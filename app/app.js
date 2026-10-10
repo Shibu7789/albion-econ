@@ -299,7 +299,7 @@
           const x = m.get(g.id) || { g, q: 0, price: Infinity, uses: [], be: Infinity };
           x.q += E.buyQty(g, l.n); x.price = Math.min(x.price, g.price);
           const be = E.breakEven(g, l); if (be != null) x.be = Math.min(x.be, be);
-          x.uses.push(l.salvage ? 'à recycler' : l.flip ? 'à revendre' : l.id === g.id ? '' : 'pour ' + esc(l.name));
+          x.uses.push(l.salvage ? 'à recycler' : l.flip ? 'à revendre' : l.id === g.id ? '' : g.via ? 'pour faire d\'abord ' + esc(g.via) + ' → ' + esc(l.name) : 'pour ' + esc(l.name));
           m.set(g.id, x);
         }
       }

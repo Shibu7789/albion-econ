@@ -184,7 +184,7 @@
           const extra = noret ? 0 : qty * R;      // part rendue après coup : il faut l'avoir pour lancer le 1er craft
           if (u.buy) leaves.push({ id: items[ii].id, name: items[ii].n, price: u.buy.raw, city: u.buy.city, effQty: eff, start: extra });
           else {
-            u.leaves.forEach(l => leaves.push(Object.assign({}, l, { effQty: l.effQty * eff, start: (l.start || 0) + extra * l.effQty })));
+            u.leaves.forEach(l => leaves.push(Object.assign({}, l, { effQty: l.effQty * eff, start: (l.start || 0) + extra * l.effQty, via: l.via || items[ii].n })));
             u.steps.forEach(st => steps.push(Object.assign({}, st, { qty: st.qty * eff, start: (st.start || 0) + extra * st.qty })));
           }
         }
@@ -270,7 +270,7 @@
         const extra = noret ? 0 : qty * R;        // le retour arrive APRÈS le craft : stock de départ nécessaire
         if (u.buy) lines.push({ id: ing.id, name: ing.n, qty, price: u.buy.raw, city: u.buy.city, effQty: eff, start: extra });
         else {
-          u.leaves.forEach(l => lines.push(Object.assign({}, l, { qty: l.effQty * eff, effQty: l.effQty * eff, start: (l.start || 0) + extra * l.effQty })));
+          u.leaves.forEach(l => lines.push(Object.assign({}, l, { qty: l.effQty * eff, effQty: l.effQty * eff, start: (l.start || 0) + extra * l.effQty, via: l.via || ing.n })));
           u.steps.forEach(st => chain.push(Object.assign({}, st, { qty: st.qty * eff, start: (st.start || 0) + extra * st.qty })));
         }
       }
