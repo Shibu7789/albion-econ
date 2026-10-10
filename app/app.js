@@ -84,6 +84,24 @@
     store.set('ae.tab', name);
   }
 
+  /* ---------- Bonus du jour : quelques lignes ville + catégorie + %, valables aujourd'hui seulement ---------- */
+  const today = () => new Date().toISOString().slice(0, 10);
+  function dailyList() { const p = prof(); return p.dailyDate === today() ? (p.dailyList || []) : []; }
+  function dailyToMap(list) { const m = {}; for (const d of list) if (d.city && d.pct > 0) m[d.city] = { pct: d.pct, cat: d.cat || null }; return m; }
+  function renderDaily() {
+    const list = dailyList();
+    const catOpts = sel => '<option value="">toutes catégories</option>' + Object.entries(CAT_LABEL).map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`).join('');
+    const cityOpts = sel => E.CITIES.map(c => `<option ${c === sel ? 'selected' : ''}>${c}</option>`).join('');
+    $('#daily-rows').innerHTML = list.map((d, k) => `<div class="drow" data-k="${k}"><select data-dc>${cityOpts(d.city)}</select><select data-dk>${catOpts(d.cat)}</select><input type="number" min="0" step="1" data-dp value="${d.pct ? Math.round(d.pct * 100) : ''}" placeholder="%"><button class="ghost small" data-del="${k}" type="button">×</button></div>`).join('');
+    $('#daily-sum').textContent = list.length ? list.map(d => `${d.city} +${Math.round(d.pct * 100)} %`).join(', ') : 'aucun';
+  }
+  function saveDaily() {
+    const list = $$('#daily-rows .drow').map(r => ({ city: r.querySelector('[data-dc]').value, cat: r.querySelector('[data-dk]').value || null,
+      pct: (+r.querySelector('[data-dp]').value || 0) / 100 }));
+    updateProf({ dailyDate: today(), dailyList: list, dailyBonus: dailyToMap(list) });
+    $('#daily-sum').textContent = list.filter(d => d.pct > 0).length ? list.filter(d => d.pct > 0).map(d => `${d.city} +${Math.round(d.pct * 100)} %`).join(', ') : 'aucun';
+  }
+
   /* ---------- Analyse du jour ---------- */
   let lastPlan = null, lastPrices = null, lastVolumes = null;
   // Argent des lignes mises en vente APRÈS la dernière saisie de la banque : déjà dépensé, pas encore revenu.
@@ -94,7 +112,8 @@
       .reduce((s, r) => s + (r.cost || 0), 0);
   }
   function engineProfile(p) {
-    return Object.assign({}, p, { capital: Math.max(0, (p.bank || 0) - (p.reserve || 0) - lockedSinceBank(p)) });
+    return Object.assign({}, p, { capital: Math.max(0, (p.bank || 0) - (p.reserve || 0) - lockedSinceBank(p)),
+      dailyBonus: p.dailyDate === today() ? dailyToMap(p.dailyList || []) : {} });
   }
   function itemFilter(p) {
     const fams = new Set(p.families);
@@ -403,9 +422,7 @@
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
     $('#pf-fees').innerHTML = E.CITIES.map(c => `<label class="field"><span>${c}</span><input type="number" data-fee="${c}" value="${p.stationFee[c] ?? ''}" placeholder="1000"></label>`).join('');
-    const catOpts = sel => '<option value="">Catégorie…</option>' + Object.entries(CAT_LABEL).map(([k, l]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${l}</option>`).join('');
-    $('#pf-daily').innerHTML = E.CITIES.map(c => { const d = p.dailyBonus[c] || {};
-      return `<div class="field"><span>${c}</span><div class="row"><input type="number" step="1" data-daily="${c}" value="${d.pct ? Math.round(d.pct * 100) : ''}" placeholder="%" style="width:5em"><select data-dailycat="${c}" style="flex:1">${catOpts(d.cat)}</select></div></div>`; }).join('');
+    renderDaily();
     ['maxAge', 'liqShare', 'maxShare', 'minMargin', 'minutesPerLine', 'minLineProfit'].forEach(k => {
       const el = $('#pf-' + k); const pct = ['liqShare', 'maxShare', 'minMargin'].includes(k);
       el.value = pct ? Math.round(p[k] * 100) : p[k];
@@ -428,8 +445,6 @@
       travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, brecilienMinutes: $('#pf-brecmin').value === '' ? null : +$('#pf-brecmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45, goalPerDay: +$('#pf-goal').value || 0, progressShare: Math.max(0, Math.min(50, +$('#pf-prog').value || 0)) / 100,
       cities: $$('#pf-cities input:checked').map(i => i.value), families: $$('#pf-families input:checked').map(i => i.value),
       stationFee: Object.fromEntries($$('[data-fee]').filter(i => i.value !== '').map(i => [i.dataset.fee, +i.value])),
-      dailyBonus: Object.fromEntries($$('[data-daily]').filter(i => i.value !== '' && +i.value > 0)
-        .map(i => [i.dataset.daily, { pct: +i.value / 100, cat: $(`[data-dailycat="${i.dataset.daily}"]`).value || null }])),
       maxAge: +$('#pf-maxAge').value || 12, liqShare: (+$('#pf-liqShare').value || 15) / 100,
       maxShare: (+$('#pf-maxShare').value || 25) / 100, minMargin: (+$('#pf-minMargin').value || 0) / 100,
       minutesPerLine: +$('#pf-minutesPerLine').value || 5, minLineProfit: +$('#pf-minLineProfit').value || 0,
@@ -563,6 +578,10 @@
     $$('.tab').forEach(t => t.addEventListener('click', () => showTab(t.dataset.tab)));
     showTab(store.get('ae.tab', 'today'));
     $('#run').addEventListener('click', analyze);
+    $('#daily-add').addEventListener('click', () => { const l = dailyList().concat([{ city: 'Lymhurst', cat: null, pct: 0 }]); updateProf({ dailyDate: today(), dailyList: l }); renderDaily(); });
+    $('#daily-rows').addEventListener('change', saveDaily);
+    $('#daily-rows').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (!b) return;
+      const l = dailyList(); l.splice(+b.dataset.del, 1); updateProf({ dailyDate: today(), dailyList: l, dailyBonus: dailyToMap(l) }); renderDaily(); });
     $('#plan').addEventListener('click', e => { const b = e.target.closest('[data-start]'); if (b) startLine(b.dataset.start.startsWith('bm') ? b.dataset.start : +b.dataset.start); });
     $('#log').addEventListener('click', e => { const b = e.target.closest('[data-sold]'); if (b) sellEntry(b.dataset.sold); });
     $('#p-profile').addEventListener('change', e => { if (e.target.dataset.spec !== undefined) {

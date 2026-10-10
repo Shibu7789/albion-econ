@@ -66,6 +66,7 @@ button{font:600 1rem var(--f-body);border-radius:8px;cursor:pointer}
 .tasks{margin:0;padding-left:18px;display:grid;gap:5px}
 .go{margin:8px 0 0;font-size:.92rem}
 .line .gain b.neg{color:var(--neg)}
+.daily{margin:0 0 12px} .daily summary{cursor:pointer;font-weight:600} .drow{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0} .drow select{flex:1;min-width:8em} .drow input{width:5em}
 .gainmini{color:var(--pos);font-family:var(--f-num);font-size:.85rem}
 button.small{padding:2px 8px;font-size:.8rem;margin-left:6px}
 details.detail>summary,details.risky>summary{cursor:pointer;margin:6px 0 10px}
@@ -118,6 +119,9 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
   <h2>Ta liste du jour</h2>
   <p class="lead">L'outil lit les prix du marché européen, calcule chaque recette dans tes villes avec ta spécialisation, et retient les lignes qui tiennent dans ton temps, ton capital et ton focus.</p>
   <div id="fee-warn" class="warnbox" hidden></div>
+  <details class="daily" id="daily-box"><summary>Bonus de production du jour <span class="muted" id="daily-sum">aucun</span></summary>
+    <p class="muted small">Seulement s'il y en a un aujourd'hui. Il s'efface tout seul demain.</p>
+    <div id="daily-rows"></div><button class="ghost small" id="daily-add" type="button">+ ajouter un bonus</button></details>
   <div class="runbar"><button class="primary" id="run">Analyser le marché</button><span id="status" role="status"></span></div>
   <p class="muted small" id="k-locked"></p>
   <div class="kpis" id="kpis" hidden>
@@ -189,7 +193,6 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
       <option value="ceil">Arrondi supérieur (si constaté en jeu : 0,4 sceau = 1)</option></select></label></div>
     <p class="muted small">Le recyclage rend 20 % des matières de la recette. L'argent rendu en plus n'est pas compté tant que sa formule n'est pas mesurée.</p></div>
   <div class="card"><h3>Frais de station</h3><p class="muted small">Argent par 100 de nutrition. Vide = 1 000, le maximum autorisé par le jeu : les profits sont alors calculés au pire. Mets le prix réel de ta station pour être plus précis.</p><div class="grid" id="pf-fees"></div></div>
-  <div class="card"><h3>Bonus de production du jour</h3><p class="muted small">Annoncé en jeu chaque jour, par ville, sur une catégorie de craft ou de raffinage. Indique le pourcentage et la catégorie : il ne s'applique qu'à elle. Laisse vide s'il n'y en a pas.</p><div class="grid" id="pf-daily"></div></div>
   <div class="card"><h3>Réglages de prudence</h3><div class="grid">
     <label class="field"><span>Âge maximal d'un prix (heures)</span><input type="number" id="pf-maxAge" min="1"></label>
     <label class="field"><span>Part du volume quotidien (%)</span><input type="number" id="pf-liqShare" min="1" max="100"></label>
@@ -223,12 +226,12 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
     <li><b>Hypothèses à mesurer</b> : frais de station (valeur d'objet × 0,1125 × prix), rendement des travailleurs, minutes par ligne. Le journal des résultats remplace peu à peu ces hypothèses par tes chiffres réels.</li>
   </ul>
 </section>
-  <p class="muted small" style="margin-top:40px">Version 20261010-0614</p>
+  <p class="muted small" style="margin-top:40px">Version 20261010-0623</p>
 </main>
-<script src="data.js?v=20261010-0614"></script>
-<script src="preset.js?v=20261010-0614"></script>
-<script src="engine.js?v=20261010-0614"></script>
-<script src="market.js?v=20261010-0614"></script>
-<script src="app.js?v=20261010-0614"></script>
+<script src="data.js?v=20261010-0623"></script>
+<script src="preset.js?v=20261010-0623"></script>
+<script src="engine.js?v=20261010-0623"></script>
+<script src="market.js?v=20261010-0623"></script>
+<script src="app.js?v=20261010-0623"></script>
 </body>
 </html>
