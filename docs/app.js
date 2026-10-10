@@ -51,7 +51,7 @@
   const DEFAULT_PROFILE = {
     name: 'Principal', premium: false, focus: 0, bank: 0, reserve: 10000000,
     cities: ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Caerleon', 'Brecilien'],
-    multiCity: true, travelMult: 1, travelMinutes: 5, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
+    multiCity: true, riskyOuting: false, travelMult: 1, travelMinutes: 5, mode: 'instant', families: ['raff', 'pot', 'food', 'weap', 'arm', 'off', 'gear', 'up', 'trans', 'flip', 'salv'],
     maxAge: 12, liqShare: 0.15, maxShare: 0.25, minMargin: 0.05, minutes: 45, minutesPerLine: 5,
     minLineProfit: 10000, stationFee: {}, dailyBonus: {}, specs: {},
   };
@@ -117,14 +117,21 @@
         (it.r || []).forEach(r => r[4].forEach(([ii]) => need.add(DATA.items[ii].id)));
         if (it.up) { need.add(DATA.items[it.up[0]].id); it.up[1].forEach(([ii]) => need.add(DATA.items[ii].id)); }
       });
-      const locs = p.cities.includes('Caerleon') ? p.cities.concat('Black Market') : p.cities.slice();
+      // Priorité : sans risque. Liste du jour = 5 villes royales seulement (reliées par le Travel Planner).
+      // Caerleon, Brecilien et le Black Market = option « sortie risquée », hors capital et hors objectifs du jour.
+      const ROYALS = ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling'];
+      const risky = !!p.riskyOuting;
+      const riskyCities = risky ? p.cities.filter(c => !ROYALS.includes(c)) : [];
+      const locs = p.cities.filter(c => ROYALS.includes(c)).concat(riskyCities, riskyCities.includes('Caerleon') ? ['Black Market'] : []);
       setStatus(`Lecture des prix : ${need.size} objets, ${locs.length} marchés…`);
       const prices = await M.fetchPrices([...need], locs, { onProgress: (d, t) => setStatus(`Lecture des prix… ${d}/${t}`) });
       // Liste du jour sans Black Market (trajet risqué) ; le Black Market a sa propre liste, pour une sortie par semaine
-      const pDay = Object.assign({}, p, { blackMarket: false });
+      const pDay = Object.assign({}, p, { blackMarket: false, cities: p.cities.filter(c => ROYALS.includes(c)) });
       const pBM = Object.assign({}, p, { blackMarket: 'only' });
+      const pSite = Object.assign({}, p, { blackMarket: false, cities: riskyCities });
       const opps = E.opportunities(prices, pDay, filt).concat(doFlip ? E.flips(prices, pDay) : [], doSalv ? E.salvages(prices, pDay) : []);
-      const oppsBM = p.cities.includes('Caerleon') ? E.opportunities(prices, pBM, filt).concat(doFlip ? E.flips(prices, pBM) : []) : [];
+      const oppsBM = !risky ? [] : (riskyCities.includes('Caerleon') ? E.opportunities(prices, pBM, filt).concat(doFlip ? E.flips(prices, pBM) : []) : [])
+        .concat(riskyCities.length ? E.opportunities(prices, pSite, filt) : []);
       opps.sort((a, b) => b.profit - a.profit);
       // les 1 000 objets les plus prometteurs (toutes villes de craft confondues) passent au contrôle par l'historique
       oppsBM.sort((a, b) => b.profit - a.profit);
@@ -141,6 +148,7 @@
       lastPlan = E.plan(checked, volumes, pDay);
       const checkedBM = E.applyHistory(topBM, volumes, prices, pBM).sort((a, b) => b.profit - a.profit);
       // sortie hebdomadaire : quantités sur 7 jours de volume, pas de limite de temps de session
+      // calcul à part : n'entame ni le capital ni le focus ni le temps de la liste du jour
       lastPlan.bm = E.plan(checkedBM, volumes, Object.assign({}, pBM, { liqShare: pBM.liqShare * 7, minutes: 1e6, focus: 0 }));
       const volOf = (id, c) => { const h = volumes[id] && volumes[id][c]; return h ? (typeof h === 'object' ? h.n : h) : 0; };
       for (const l of lastPlan.lines.concat(lastPlan.bm.lines)) l.dailyVol = l.salvage ? 0 : volOf(l.id, l.sellVenue);
@@ -175,9 +183,9 @@
     const byCity = {};
     pl.lines.forEach((l, i) => { const g = (l.flip ? 'Revente — acheter à ' : l.salvage ? 'Recyclage — acheter à ' : 'Crafter à ') + l.city; (byCity[g] = byCity[g] || []).push([l, i]); });
     const p = prof();
-    const bm = pl.bm && pl.bm.lines.length ? `<section class="city"><h3>Sortie Black Market <span class="muted">une fois par semaine, en groupe · ${fmtK(pl.bm.totalProfit)} prévus pour ${fmtK(pl.bm.capitalUsed)} engagés</span></h3>
-      <p class="muted small">Trajet risqué (zones rouges autour de Caerleon) : ces lignes ne sont pas dans ta liste du jour. Quantités calculées sur une semaine de ventes.</p>
-      ${pl.bm.lines.map((l, k) => lineHTML(l, 'bm' + k, p)).join('')}</section>` : '';
+    const bm = p.riskyOuting && pl.bm && pl.bm.lines.length ? `<details class="city risky"><summary><h3 style="display:inline">Option : sortie risquée <span class="muted">Caerleon, Brecilien, Black Market · en groupe, une fois par semaine</span></h3></summary>
+      <p class="muted small">Hors liste du jour : ces lignes ne comptent ni dans ton capital engagé, ni dans ton profit prévu. Ne les fais qu'avec l'argent qui reste après ta liste du jour. Quantités calculées sur une semaine de ventes. Seraient engagés : ${fmtK(pl.bm.capitalUsed)} pour ${fmtK(pl.bm.totalProfit)} prévus.</p>
+      ${pl.bm.lines.map((l, k) => lineHTML(l, 'bm' + k, p)).join('')}</details>` : '';
     box.innerHTML = Object.entries(byCity).map(([city, ls]) => `
       <section class="city"><h3>${esc(city)} <span class="muted">${ls.length} ligne${ls.length > 1 ? 's' : ''}</span></h3>
       ${ls.map(([l, i]) => lineHTML(l, i, p)).join('')}</section>`).join('') + bm;
@@ -283,7 +291,7 @@
     $('#pf-premium').checked = !!p.premium;
     $('#pf-focus').value = p.focus; $('#pf-bank').value = p.bank; $('#pf-reserve').value = p.reserve;
     $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes;
-    $('#pf-multi').checked = !!p.multiCity; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = p.travelMult ?? 1;
+    $('#pf-multi').checked = !!p.multiCity; $('#pf-risky').checked = !!p.riskyOuting; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = p.travelMult ?? 1;
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
     $('#pf-fees').innerHTML = E.CITIES.map(c => `<label class="field"><span>${c}</span><input type="number" data-fee="${c}" value="${p.stationFee[c] ?? ''}" placeholder="1000"></label>`).join('');
@@ -308,7 +316,7 @@
     updateProf({
       premium: $('#pf-premium').checked, focus: +$('#pf-focus').value || 0, bank: +$('#pf-bank').value || 0,
       reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value,
-      multiCity: $('#pf-multi').checked, salvageRound: $('#pf-salvround').value,
+      multiCity: $('#pf-multi').checked, riskyOuting: $('#pf-risky').checked, salvageRound: $('#pf-salvround').value,
       travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45,
       cities: $$('#pf-cities input:checked').map(i => i.value), families: $$('#pf-families input:checked').map(i => i.value),
       stationFee: Object.fromEntries($$('[data-fee]').filter(i => i.value !== '').map(i => [i.dataset.fee, +i.value])),

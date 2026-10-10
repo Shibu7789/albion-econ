@@ -22,8 +22,9 @@ jour sans qu'il ait à intervenir.
 4. **Ne jamais publier un outil qui ne passe pas ses tests.** `bash pipeline/update.sh` doit finir par
    « Reconstruction terminée et testée. » avant tout `git push`.
 5. **Sécurité du joueur** : transport de marchandise uniquement entre les 5 villes royales (Travel
-   Planner). Caerleon et Brecilien : achat, craft et vente sur place uniquement. Le Black Market et tout
-   trajet vers Caerleon sont réservés à la liste « sortie hebdomadaire en groupe ». La réserve d'argent
+   Planner). Caerleon et Brecilien : achat, craft et vente sur place uniquement. La liste du jour reste
+   sans risque (5 villes royales). Caerleon, Brecilien et le Black Market ne sont qu'une option « sortie
+   risquée », désactivée par défaut, calculée à part et jamais comptée dans le capital ni les objectifs. La réserve d'argent
    du profil n'est jamais engagée.
 6. **Sujets clos** : voir `notes/decisions.md`. Ne pas les relancer sans élément nouveau et sourcé.
 
