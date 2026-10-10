@@ -601,9 +601,12 @@
       function minutesOf(o) {
         if (o.transport === 'tp') return prof.minutesPerLine || 5;   // téléportation : pas de trajet à faire
         const need = new Set([o.city, ...(o.trips || [])]);
-        let fresh = 0; for (const c of need) if (!visited.has(c)) fresh++;
-        if (!visited.size) fresh = Math.max(0, fresh - 1);           // la première ville de la session est gratuite
-        return (prof.minutesPerLine || 5) + travel * fresh;
+        let fresh = 0, brec = 0;
+        for (const c of need) if (!visited.has(c)) { if (c === 'Brecilien') brec++; else fresh++; }
+        if (!visited.size && fresh) fresh--; else if (!visited.size && brec) brec--;   // la première ville de la session est gratuite
+        // Brecilien : par une brume en zone jaune, sortie aléatoire → temps aller-retour propre (profil), sinon un trajet
+        const brecMin = prof.brecilienMinutes != null ? prof.brecilienMinutes : travel;
+        return (prof.minutesPerLine || 5) + travel * fresh + brecMin * brec;
       }
       for (;;) {
         let pick = null;

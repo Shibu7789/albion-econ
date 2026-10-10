@@ -23,7 +23,7 @@ jour sans qu'il ait à intervenir.
    « Reconstruction terminée et testée. » avant tout `git push`.
 5. **Sécurité du joueur** : transport de marchandise uniquement entre les 5 villes royales (Travel
    Planner). Caerleon et Brecilien : achat, craft et vente sur place uniquement. La liste du jour reste
-   sans risque (5 villes royales). Caerleon, Brecilien et le Black Market ne sont qu'une option « sortie
+   sans risque (5 villes royales, plus Brecilien sur place). Caerleon et le Black Market ne sont qu'une option « sortie
    risquée », désactivée par défaut, calculée à part et jamais comptée dans le capital ni les objectifs. La réserve d'argent
    du profil n'est jamais engagée.
 6. **Sujets clos** : voir `notes/decisions.md`. Ne pas les relancer sans élément nouveau et sourcé.

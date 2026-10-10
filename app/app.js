@@ -118,8 +118,8 @@
         if (it.up) { need.add(DATA.items[it.up[0]].id); it.up[1].forEach(([ii]) => need.add(DATA.items[ii].id)); }
       });
       // Priorité : sans risque. Liste du jour = 5 villes royales seulement (reliées par le Travel Planner).
-      // Caerleon, Brecilien et le Black Market = option « sortie risquée », hors capital et hors objectifs du jour.
-      const ROYALS = ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling'];
+      // Caerleon et le Black Market = option « sortie risquée », hors capital et hors objectifs du jour.
+      const ROYALS = ['Thetford', 'Lymhurst', 'Bridgewatch', 'Martlock', 'Fort Sterling', 'Brecilien'];   // Brecilien : accès par une brume en zone jaune, sans risque (sur place seulement)
       const risky = !!p.riskyOuting;
       const riskyCities = risky ? p.cities.filter(c => !ROYALS.includes(c)) : [];
       const locs = p.cities.filter(c => ROYALS.includes(c)).concat(riskyCities, riskyCities.includes('Caerleon') ? ['Black Market'] : []);
@@ -183,7 +183,7 @@
     const byCity = {};
     pl.lines.forEach((l, i) => { const g = (l.flip ? 'Revente — acheter à ' : l.salvage ? 'Recyclage — acheter à ' : 'Crafter à ') + l.city; (byCity[g] = byCity[g] || []).push([l, i]); });
     const p = prof();
-    const bm = p.riskyOuting && pl.bm && pl.bm.lines.length ? `<details class="city risky"><summary><h3 style="display:inline">Option : sortie risquée <span class="muted">Caerleon, Brecilien, Black Market · en groupe, une fois par semaine</span></h3></summary>
+    const bm = p.riskyOuting && pl.bm && pl.bm.lines.length ? `<details class="city risky"><summary><h3 style="display:inline">Option : sortie risquée <span class="muted">Caerleon, Black Market · en groupe, une fois par semaine</span></h3></summary>
       <p class="muted small">Hors liste du jour : ces lignes ne comptent ni dans ton capital engagé, ni dans ton profit prévu. Ne les fais qu'avec l'argent qui reste après ta liste du jour. Quantités calculées sur une semaine de ventes. Seraient engagés : ${fmtK(pl.bm.capitalUsed)} pour ${fmtK(pl.bm.totalProfit)} prévus.</p>
       ${pl.bm.lines.map((l, k) => lineHTML(l, 'bm' + k, p)).join('')}</details>` : '';
     box.innerHTML = Object.entries(byCity).map(([city, ls]) => `
@@ -291,7 +291,7 @@
     $('#pf-premium').checked = !!p.premium;
     $('#pf-focus').value = p.focus; $('#pf-bank').value = p.bank; $('#pf-reserve').value = p.reserve;
     $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes;
-    $('#pf-multi').checked = !!p.multiCity; $('#pf-risky').checked = !!p.riskyOuting; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = p.travelMult ?? 1;
+    $('#pf-multi').checked = !!p.multiCity; $('#pf-risky').checked = !!p.riskyOuting; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-brecmin').value = p.brecilienMinutes ?? ''; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = p.travelMult ?? 1;
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
     $('#pf-fees').innerHTML = E.CITIES.map(c => `<label class="field"><span>${c}</span><input type="number" data-fee="${c}" value="${p.stationFee[c] ?? ''}" placeholder="1000"></label>`).join('');
@@ -317,7 +317,7 @@
       premium: $('#pf-premium').checked, focus: +$('#pf-focus').value || 0, bank: +$('#pf-bank').value || 0,
       reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value,
       multiCity: $('#pf-multi').checked, riskyOuting: $('#pf-risky').checked, salvageRound: $('#pf-salvround').value,
-      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45,
+      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, brecilienMinutes: $('#pf-brecmin').value === '' ? null : +$('#pf-brecmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45,
       cities: $$('#pf-cities input:checked').map(i => i.value), families: $$('#pf-families input:checked').map(i => i.value),
       stationFee: Object.fromEntries($$('[data-fee]').filter(i => i.value !== '').map(i => [i.dataset.fee, +i.value])),
       dailyBonus: Object.fromEntries($$('[data-daily]').filter(i => i.value !== '' && +i.value > 0)

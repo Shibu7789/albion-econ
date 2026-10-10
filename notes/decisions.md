@@ -8,7 +8,7 @@
 | 2026-10-07 | Profil du joueur (spés, capital, résultats) stocké dans son navigateur, jamais dans le dépôt public | Clos |
 | 2026-10-07 | Profit calculé sur la qualité Normale ; le bonus de qualité est affiché à part | Clos |
 | 2026-10-07 | Achat et vente dans toutes les villes : transport uniquement entre les 5 villes royales (Travel Planner) ; Caerleon et Brecilien sur place seulement ; Travel Planner : voyage gratuit d'environ 5 min par trajet, ou téléportation instantanée payée au poids (donnée du joueur) ; frais de téléportation = ceil(poids × fasttravelfactor × 150 × multiplicateur serveur) × distance, multiplicateur à calibrer ; le planificateur garde le mode le plus rentable par minute | Clos |
-| 2026-10-10 | Priorité sans risque : liste du jour limitée aux 5 villes royales. Caerleon, Brecilien et Black Market = option « sortie risquée » (désactivée par défaut), calculée à part, hors capital, profit et objectifs du jour | Clos |
+| 2026-10-10 | Priorité sans risque : liste du jour = 5 villes royales + Brecilien sur place (brume en zone jaune, sans risque, sortie aléatoire ; temps aller-retour réglable). Caerleon et Black Market = option « sortie risquée » (désactivée par défaut), calculée à part, hors capital, profit et objectifs du jour | Clos |
 | 2026-10-07 | Frais de station par défaut = plafond officiel (maxuseagefee 1000) | Clos |
 | 2026-10-07 | Ventes suivies en deux temps (mis en vente, vendu) : délai de vente mesuré, pas supposé | Clos |
 | 2026-10-07 | La réserve de 10 M (stuff) n'est jamais engagée, y compris en journée | Clos |
