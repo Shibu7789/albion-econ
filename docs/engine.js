@@ -217,7 +217,41 @@
     // Quantité à acheter pour n crafts : le retour de ressources n'arrive qu'après chaque craft, donc il faut le
     // stock complet du premier craft, puis la consommation nette pour les suivants (retours réutilisés).
     // Il reste en fin de série environ « start » unités en stock (valeur conservée, comptée dans le capital immobilisé).
-    function buyQty(l, n) { return n > 0 ? Math.ceil(l.effQty * n + (l.start || 0) - 1e-9) : 0; }
+    function buyQty(l, n, o) {
+      if (!(n > 0)) return 0;
+      const est = Math.ceil(l.effQty * n + (l.start || 0) - 1e-9);
+      // Ingrédient direct rendu par le retour de ressources : le jeu ne lance que ce que tu as en sac, les ressources
+      // reviennent à la FIN de chaque lancement, puis tu relances. On simule ces lancements (retours arrondis à l'unité
+      // inférieure, par prudence) et on prend la plus petite quantité qui permet les n crafts.
+      if (o && o.rrr > 0 && l.qty > 0 && !l.via && l.start > 0) {
+        const q = l.qty;
+        let B = Math.max(Math.ceil(q), Math.floor(est * 0.95));
+        for (let guard = 0; guard < 5000 && batches(B, q, o.rrr, n).done < n; guard++) B++;
+        return Math.max(B, Math.ceil(q));
+      }
+      return est;
+    }
+    // Lancements successifs : chaque lancement = ce que permet le stock, puis retour des ressources à la fin
+    function batches(stock, q, R, n) {
+      const seq = []; let done = 0;
+      while (done < n) {
+        const c = Math.min(Math.floor((stock + 1e-9) / q), n - done);
+        if (c <= 0) break;
+        stock -= c * q; stock += Math.floor(c * q * R + 1e-9); done += c; seq.push(c);
+        if (seq.length > 200) break;
+      }
+      return { done, seq };
+    }
+    // Lancements à prévoir pour une ligne (ingrédient direct le plus contraignant)
+    function launches(o) {
+      let best = null;
+      for (const l of o.ingredients) {
+        if (!(o.rrr > 0 && l.qty > 0 && !l.via && l.start > 0)) continue;
+        const b = batches(buyQty(l, o.n, o), l.qty, o.rrr, o.n);
+        if (!best || b.seq.length > best.seq.length) best = b;
+      }
+      return best;
+    }
     function startCapital(o) { return o.ingredients.reduce((s, l) => s + (l.start || 0) * (l.price || 0), 0); }
 
     /* ---------- Évaluation d'une recette dans une ville ---------- */
@@ -664,7 +698,7 @@
         }
         if (!pick) break;
         const { o, n, mins } = pick;
-        for (const l of o.ingredients) if (l.city !== 'Île') left[leftOf(l.id, l.city || o.city)] -= buyQty(l, n);
+        for (const l of o.ingredients) if (l.city !== 'Île') left[leftOf(l.id, l.city || o.city)] -= buyQty(l, n, o);
         const stock = startCapital(o);
         chosen.push(Object.assign({}, o, { n, tpTotal: (o.tpUnit || 0) * n, stockCost: stock, totalCost: n * o.cost + stock, totalProfit: n * o.profit, totalFocus: n * o.focus,
           minutes: mins, perMinute: n * o.profit / mins }));
@@ -806,7 +840,7 @@
         let peak = 0;
         for (const a of st.actions.slice().sort((x, y) => ({ buy: 0, make: 1, salvage: 1, sell: 2 })[x.type] - ({ buy: 0, make: 1, salvage: 1, sell: 2 })[y.type])) {
           const l = lines[a.line];
-          if (a.type === 'buy') for (const g of a.items) add(a.line, g.id, buyQty(g, l.n));
+          if (a.type === 'buy') for (const g of a.items) add(a.line, g.id, buyQty(g, l.n, l));
           if (a.type === 'buy' || a.type === 'make' || a.type === 'salvage') { let k2 = 0; for (const h of hold) for (const [id, q] of h) k2 += q * W(id); peak = Math.max(peak, k2); }
           else if (a.type === 'make') { hold[a.line].clear(); add(a.line, l.id, l.n * l.amount); }
           else if (a.type === 'salvage') { hold[a.line].clear(); for (const x of l.outputs) add(a.line, x.id, x.units * l.n); }
@@ -839,7 +873,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, breakEven, sellByOrder, buyByOrder, applyHistory, tcost, tpCost, buyQty, startCapital, route, tierCap, nodesToLevel, craftFame, journalGain, progressionCandidates, progressionPick, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, breakEven, sellByOrder, buyByOrder, applyHistory, tcost, tpCost, buyQty, batches, launches, startCapital, route, tierCap, nodesToLevel, craftFame, journalGain, progressionCandidates, progressionPick, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

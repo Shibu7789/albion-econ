@@ -378,4 +378,13 @@ t('transport : charge par trajet (poids officiels) et ligne limitée à la capac
   const pl = E.plan([o], { T5_CLOTH: { Martlock: 1e6, Lymhurst: 1e6 } }, Object.assign({}, prof, { capital: 1e9, maxShare: 1, liqShare: 1, minutes: 100, minLineProfit: 0, carryKg: 50 * w, teleport: false }));
   assert.strictEqual(pl.lines[0].n, 50, 'limité à la capacité');
 });
+t('lancements successifs : retours à la fin de chaque lancement, quantité suffisante pour n crafts', () => {
+  const o = E.evaluate(prices, i5, rec, 1, 'Lymhurst', false, prof);
+  const fib = o.ingredients.find(g => g.id === 'T5_FIBER');
+  const line = Object.assign({}, o, { n: 400 });
+  const B = E.buyQty(fib, 400, line);
+  assert.ok(E.batches(B, 3, o.rrr, 400).done >= 400, 'la quantité achetée permet les 400 crafts');
+  assert.ok(E.batches(B - 1, 3, o.rrr, 400).done < 400, 'et pas une de trop');
+  assert.ok(E.launches(line).seq.length > 3, 'plusieurs lancements');
+});
 console.log(n, 'tests OK');

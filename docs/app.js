@@ -268,6 +268,8 @@
     const it = DATA.items[l.itemIdx]; const r0 = E.rrr(E.productionBonus(it, l.kind, l.city, false, engineProfile(p).dailyBonus));
     return Math.floor(l.n * (1 - l.rrr) / (1 - r0)); };
   const focusWarn = (l, p) => { const k = noFocusCrafts(l, p); return k != null && k < l.n ? `<br><span class="neg small">Active bien le focus : sans focus, ces achats ne suffisent que pour ≈ ${fmt(k)} crafts sur ${fmt(l.n)}.</span>` : ''; };
+  const launchTxt = l => { const b = l.n ? E.launches(l) : null; if (!b || b.seq.length < 2) return '';
+    return `<br><span class="muted">En ${b.seq.length} lancements : le jeu ne lance que ce que tu as en sac, les ressources rendues reviennent à la fin, puis tu relances (≈ ${b.seq.slice(0, 6).map(fmt).join(', ')}${b.seq.length > 6 ? '…' : ''}).</span>`; };
   const signK = v => (v >= 0 ? '+' : '−') + fmtK(Math.abs(v));
   const sellPrice = (l, p) => l.unitSell / (1 - E.salesTax(p) - (E.sellByOrder(p) && l.sellVenue !== 'Black Market' ? DATA.consts.setupFee : 0));
   const ORDER = { buy: 0, make: 1, salvage: 1, sell: 2 };
@@ -283,7 +285,7 @@
       if (a.type === 'make') {
         const pre = l.chain && l.chain.length ? l.chain.map(st => `${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'} <span class="q">${fmt(Math.ceil(st.qty * l.n + (st.start || 0) - 1e-9))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span>${st.focus ? ' au focus' : ''}`).join(', puis ') + ', puis ' : '';
         const verb = l.kind === 3 ? 'Améliorer' : l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter';
-        return `<li>${pre ? '<span class="muted">' + pre + '</span>' : ''}<b>${verb}</b> <span class="q">${fmt(l.n)}</span> × ${name(l)}${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}${l.prog ? ` <span class="muted">· sans focus, monte ${esc(l.levels[0].name)}</span>` : ''}${l.journal ? `<br><span class="muted">Journaux : ${journalTxt(l)}</span>` : ''}${focusWarn(l, p)}</li>`;
+        return `<li>${pre ? '<span class="muted">' + pre + '</span>' : ''}<b>${verb}</b> <span class="q">${fmt(l.n)}</span> × ${name(l)}${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}${l.prog ? ` <span class="muted">· sans focus, monte ${esc(l.levels[0].name)}</span>` : ''}${launchTxt(l)}${l.journal ? `<br><span class="muted">Journaux : ${journalTxt(l)}</span>` : ''}${focusWarn(l, p)}</li>`;
       }
       const bm = a.city === 'Black Market';
       const verb = E.sellByOrder(p) && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
@@ -297,7 +299,7 @@
         const l = pl.lines[a.line];
         for (const g of a.items) {
           const x = m.get(g.id) || { g, q: 0, price: Infinity, uses: [], be: Infinity };
-          x.q += E.buyQty(g, l.n); x.price = Math.min(x.price, g.price);
+          x.q += E.buyQty(g, l.n, l); x.price = Math.min(x.price, g.price);
           const be = E.breakEven(g, l); if (be != null) x.be = Math.min(x.be, be);
           x.uses.push(l.salvage ? 'à recycler' : l.flip ? 'à revendre' : l.id === g.id ? '' : g.via ? 'pour faire d\'abord ' + esc(g.via) + ' → ' + esc(l.name) : 'pour ' + esc(l.name));
           m.set(g.id, x);
@@ -339,7 +341,7 @@
     const bm = l.sellVenue === 'Black Market';
     const sellVerb = E.sellByOrder(p) && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
     const ench = l.ench ? '.' + l.ench : '';
-    const ings = l.ingredients.map(g => `<li><span class="q">${fmt(E.buyQty(g, l.n))}</span> ${esc(g.name)} <span class="muted">vu à ${fmt(g.price)}${E.breakEven(g, l) != null ? ' · rentable jusqu\'à ' + fmt(E.breakEven(g, l)) : ''}${g.city && g.city !== l.city ? ' · <b>' + esc(g.city) + '</b>' : ''}</span></li>`).join('');
+    const ings = l.ingredients.map(g => `<li><span class="q">${fmt(E.buyQty(g, l.n, l))}</span> ${esc(g.name)} <span class="muted">vu à ${fmt(g.price)}${E.breakEven(g, l) != null ? ' · rentable jusqu\'à ' + fmt(E.breakEven(g, l)) : ''}${g.city && g.city !== l.city ? ' · <b>' + esc(g.city) + '</b>' : ''}</span></li>`).join('');
     return `<article class="line" data-i="${i}">
       <header><label class="chk"><input type="checkbox" id="done-${i}"> <span class="kind">${esc(l.kindLabel)}</span></label>
         <h4>${esc(l.name)} <span class="tier">T${l.tier}${ench}</span></h4>
