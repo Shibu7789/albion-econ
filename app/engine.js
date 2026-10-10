@@ -578,12 +578,13 @@
       for (const o of opps) {
         const nMax = maxCrafts(o, volumes, prof);
         if (nMax <= 0) continue;
-        if (!byItem.has(o.id)) byItem.set(o.id, []);
-        byItem.get(o.id).push({ o: Object.assign({}, o, { transport: o.trips && o.trips.length ? 'voyage' : null }), nMax });
+        const key = o.salvage ? 'recyclage:' + o.id : o.id;    // recycler X (achat) ne concurrence pas la vente de X
+        if (!byItem.has(key)) byItem.set(key, []);
+        byItem.get(key).push({ o: Object.assign({}, o, { transport: o.trips && o.trips.length ? 'voyage' : null }), nMax });
         // même opération en se téléportant : instantané, frais selon le poids
         const tp = prof.teleport !== false && o.trips && o.trips.length ? tpCost(o, prof) : null;
         if (tp != null && o.profit - tp > 0)
-          byItem.get(o.id).push({ o: Object.assign({}, o, { transport: 'tp', tpUnit: tp, cost: o.cost + tp, profit: o.profit - tp,
+          byItem.get(key).push({ o: Object.assign({}, o, { transport: 'tp', tpUnit: tp, cost: o.cost + tp, profit: o.profit - tp,
             margin: (o.profit - tp) / (o.cost + tp) }), nMax });
       }
       const chosen = [], left = {}, visited = new Set();
