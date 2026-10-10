@@ -236,13 +236,13 @@
       return n * f * Math.pow(2, item.e || 0);
     }
     // Valeur des journaux remplis par un craft : (prix du journal plein − prix du vide) × part remplie.
-    // Renommée requise : famefillingmissions officielles. Prudence : au plus un journal par craft (débordement non confirmé).
+    // Renommée requise : famefillingmissions officielles. Nombre de journaux par craft = renommée du craft ÷ renommée requise.
     function journalGain(prices, item, recipe, city, prof) {
       const j = (DATA.jmap || {})[item.id.split('@')[0]]; if (!j) return null;
       const fame = craftFame(item, recipe); if (!(fame > 0)) return null;
       const full = dispose(prices, j[0] + '_FULL', city, prof), empty = acquire(prices, j[0] + '_EMPTY', city, prof);
       if (full == null || empty == null || !(full > empty)) return null;
-      const share = prof.journalOverflow ? fame / j[1] : Math.min(1, fame / j[1]);
+      const share = prof.journalOverflow === false ? Math.min(1, fame / j[1]) : fame / j[1];   // journaux nécessaires = renommée ÷ requis
       return { id: j[0], fame, share, value: share * (full - empty), full, empty };
     }
 

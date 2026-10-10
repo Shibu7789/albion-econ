@@ -363,6 +363,6 @@ t('journaux : renommée de craft et valeur ajoutée au profit (journal plein −
   const g = E.journalGain(pr, it, rec, 'Martlock', prof);
   near(g.share, 4320 / 4800, 1e-9); near(g.value, 4320 / 4800 * (28000 * 0.92 - 9000), 1e-6);
   const big = Object.assign({}, it, { e: 2 });
-  near(E.journalGain(pr, big, rec, 'Martlock', prof).share, 1, 1e-9, 'au plus un journal par craft');
+  near(E.journalGain(pr, big, rec, 'Martlock', prof).share, 4 * 4320 / 4800, 1e-9, '.2 : renommée ×4, 3,6 journaux');
 });
 console.log(n, 'tests OK');
