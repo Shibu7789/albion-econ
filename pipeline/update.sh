@@ -10,7 +10,7 @@ mkdir -p "$BUILD/out"
 
 # 1. Données officielles du client (dépôt ao-data/ao-bin-dumps), uniquement les fichiers utiles
 FILES="/items.json /formatted/world.json /localization.json /gamedata_europe.json /craftingmodifiers.json \
-/farmingmodifiers.json /marketplace_europe.json /buildings.json /loot.json /achievements.json"
+/farmingmodifiers.json /marketplace_europe.json /buildings.json /loot.json /achievements.json /spells.json /characters.json"
 if [ ! -d "$DUMP/.git" ]; then
   git clone --depth 1 --filter=blob:none --sparse https://github.com/ao-data/ao-bin-dumps.git "$DUMP"
   git -C "$DUMP" sparse-checkout set --no-cone $FILES

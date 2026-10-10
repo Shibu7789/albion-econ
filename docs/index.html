@@ -67,6 +67,7 @@ button{font:600 1rem var(--f-body);border-radius:8px;cursor:pointer}
 .go{margin:8px 0 0;font-size:.92rem}
 .line .gain b.neg{color:var(--neg)}
 .daily{margin:0 0 12px} .daily summary{cursor:pointer;font-weight:600} .drow{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0} .drow select{flex:1;min-width:8em} .drow input{width:5em}
+.warnbox{background:var(--accent-soft);border-left:3px solid var(--warn);padding:8px 10px;margin:8px 0;font-size:.92rem}
 .gainmini{color:var(--pos);font-family:var(--f-num);font-size:.85rem}
 button.small{padding:2px 8px;font-size:.8rem;margin-left:6px}
 details.detail>summary,details.risky>summary{cursor:pointer;margin:6px 0 10px}
@@ -184,6 +185,8 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
       <label class="chip" style="align-self:end"><input type="checkbox" id="pf-risky"> Option : afficher une sortie risquée (Caerleon, Black Market), hors liste du jour</label>
       <label class="field"><span>Téléportation : multiplicateur serveur</span><input type="number" step="0.05" min="0" id="pf-travel"></label>
       <label class="field"><span>Voyage : minutes par trajet</span><input type="number" min="0" id="pf-travelmin"></label>
+      <label class="field"><span>Monture pour transporter</span><select id="pf-mount"></select></label>
+      <label class="field"><span>Ta charge sans monture (kg, sac compris)</span><input type="number" min="0" id="pf-baseload" placeholder="vide = 50 (base du jeu, sans sac)"></label>
       <label class="field"><span>Brecilien : minutes aller-retour (brume jaune, sortie aléatoire)</span><input type="number" min="0" id="pf-brecmin" placeholder="vide = minutes par trajet"></label>
     </div>
     <p class="muted small">Travel Planner, deux modes : <b>voyage</b> gratuit (minutes par trajet ci-dessus) ou <b>téléportation</b> instantanée payée selon le poids : poids × facteur de voyage × 150 × multiplicateur, ×1 entre villes voisines, ×2 sinon (formule d'Albion Free Market, poids et facteurs tirés des fichiers du jeu). Pour chaque ligne, l'outil garde le mode qui rapporte le plus par minute. Le multiplicateur de l'Europe n'est pas publié : laisse 1 ; si le prix affiché au Travel Planner diffère, mets prix réel ÷ prix calculé.</p></div>
@@ -226,12 +229,12 @@ textarea{width:100%;min-height:80px;font:.85rem var(--f-num);color:var(--fg);bac
     <li><b>Hypothèses à mesurer</b> : frais de station (valeur d'objet × 0,1125 × prix), rendement des travailleurs, minutes par ligne. Le journal des résultats remplace peu à peu ces hypothèses par tes chiffres réels.</li>
   </ul>
 </section>
-  <p class="muted small" style="margin-top:40px">Version 20261010-0623</p>
+  <p class="muted small" style="margin-top:40px">Version 20261010-0633</p>
 </main>
-<script src="data.js?v=20261010-0623"></script>
-<script src="preset.js?v=20261010-0623"></script>
-<script src="engine.js?v=20261010-0623"></script>
-<script src="market.js?v=20261010-0623"></script>
-<script src="app.js?v=20261010-0623"></script>
+<script src="data.js?v=20261010-0633"></script>
+<script src="preset.js?v=20261010-0633"></script>
+<script src="engine.js?v=20261010-0633"></script>
+<script src="market.js?v=20261010-0633"></script>
+<script src="app.js?v=20261010-0633"></script>
 </body>
 </html>

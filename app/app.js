@@ -113,7 +113,7 @@
   }
   function engineProfile(p) {
     return Object.assign({}, p, { capital: Math.max(0, (p.bank || 0) - (p.reserve || 0) - lockedSinceBank(p)),
-      dailyBonus: p.dailyDate === today() ? dailyToMap(p.dailyList || []) : {} });
+      dailyBonus: p.dailyDate === today() ? dailyToMap(p.dailyList || []) : {}, carryKg: carryCap(p) });
   }
   function itemFilter(p) {
     const fams = new Set(p.families);
@@ -245,6 +245,9 @@
       ${ls.map(([l, i]) => lineHTML(l, i, p)).join('')}</section>`).join('') + `</details>` + bm;
   }
 
+  // Capacité de transport : ta charge sans monture (profil, défaut = charge de base officielle) + bonus de la monture choisie
+  const carryCap = p => { const m = (DATA.mounts || []).find(x => x.id === p.mount); const base = p.baseLoad != null ? p.baseLoad : (DATA.baseLoad || 0);
+    return m || p.baseLoad != null ? base + (m ? m.kg : 0) : 0; };
   // Tournée : une liste de tâches par ville, dans l'ordre qui évite les allers-retours
   const tierOf = id => { const it = DATA.items[E.index.get(id)]; return it ? ` <span class="tier">T${it.t}${it.e ? '.' + it.e : ''}</span>` : ''; };
   const JTYPE = { WARRIOR: 'Guerrier (forgeron)', HUNTER: 'Chasseur (archer-fabricant)', MAGE: 'Mage (enchanteur)', TOOLMAKER: 'Outilleur' };
@@ -296,10 +299,13 @@
       }
       return [...m.values()].map(({ x, q }) => `<li><b>Vendre</b> <span class="q">${fmt(q)}</span> ${esc(x.name)}${tierOf(x.id)} <span class="muted">· issu du recyclage</span></li>`).join('');
     }
-    return `<section class="tour"><h3>Ta tournée <span class="muted">${r.stops.length} arrêt${r.stops.length > 1 ? 's' : ''} · ${fmt(r.minutes)} min de trajets</span></h3>
+    const cap = carryCap(p);
+    const over = cap > 0 && r.maxKg > cap;
+    return `<section class="tour"><h3>Ta tournée <span class="muted">${r.stops.length} arrêt${r.stops.length > 1 ? 's' : ''} · ${fmt(r.minutes)} min de trajets · charge max ${fmt(r.maxKg)} kg${cap ? ' / ' + fmt(cap) + ' kg' : ''}</span></h3>
+      ${over ? `<p class="warnbox">Trop lourd pour ta monture sur au moins un trajet (${fmt(r.maxKg)} kg pour ${fmt(cap)} kg) : fais ce trajet en plusieurs fois, ou téléporte une partie, ou baisse la part de liquidité dans le profil.</p>` : ''}
       <ol class="stops">${r.stops.map((st, k) => `<li class="stop"><h4>${esc(st.city === 'Black Market' ? 'Black Market (Caerleon)' : st.city)}</h4>
         <ul class="tasks">${buyRows(st)}${st.actions.slice().sort((a, b) => ORDER[a.type] - ORDER[b.type]).map(act).join('')}${outRows(st)}</ul>
-        ${st.next ? `<p class="go">→ Aller à <b>${esc(st.next.city)}</b> <span class="muted">≈ ${fmt(st.next.minutes)} min${st.next.city === 'Brecilien' || st.city === 'Brecilien' ? ' · par une brume en zone jaune' : ' · Travel Planner, voyage gratuit (ou téléportation si une ligne l\'indique)'}</span></p>` : ''}</li>`).join('')}</ol></section>`;
+        ${st.next ? `<p class="go">→ Aller à <b>${esc(st.next.city)}</b> <span class="${cap && st.kg > cap ? 'neg' : 'muted'}">avec ${fmt(st.kg)} kg${cap && st.kg > cap ? ' : ' + Math.ceil(st.kg / cap) + ' voyages' : ''}</span> <span class="muted">≈ ${fmt(st.next.minutes)} min${st.next.city === 'Brecilien' || st.city === 'Brecilien' ? ' · par une brume en zone jaune' : ' · Travel Planner, voyage gratuit (ou téléportation si une ligne l\'indique)'}</span></p>` : ''}</li>`).join('')}</ol></section>`;
   }
 
   // Travel Planner : voyage gratuit (temps de trajet) ou téléportation instantanée payée au poids
@@ -417,7 +423,7 @@
     $('#pf-select').innerHTML = Object.keys(profiles.list).map(n => `<option ${n === profiles.active ? 'selected' : ''}>${esc(n)}</option>`).join('');
     $('#pf-premium').checked = !!p.premium;
     $('#pf-focus').value = p.focus; $('#pf-bank').value = p.bank; $('#pf-reserve').value = p.reserve;
-    $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes; $('#pf-goal').value = p.goalPerDay ?? ''; $('#pf-prog').value = Math.round((p.progressShare ?? 0) * 100);
+    $('#pf-mode').value = p.mode; $('#pf-minutes').value = p.minutes; $('#pf-goal').value = p.goalPerDay ?? ''; $('#pf-mount').innerHTML = '<option value="">Aucune monture de charge</option>' + (DATA.mounts || []).map(m => `<option value="${m.id}" ${m.id === p.mount ? 'selected' : ''}>${esc(m.n)} (+${fmt(m.kg)} kg)</option>`).join(''); $('#pf-baseload').value = p.baseLoad ?? ''; $('#pf-prog').value = Math.round((p.progressShare ?? 0) * 100);
     $('#pf-multi').checked = !!p.multiCity; $('#pf-risky').checked = !!p.riskyOuting; $('#pf-travelmin').value = p.travelMinutes ?? 5; $('#pf-brecmin').value = p.brecilienMinutes ?? ''; $('#pf-salvround').value = p.salvageRound || 'exact'; $('#pf-travel').value = p.travelMult ?? 1;
     $('#pf-cities').innerHTML = E.CITIES.map(c => `<label class="chip"><input type="checkbox" value="${c}" ${p.cities.includes(c) ? 'checked' : ''}> ${c}</label>`).join('');
     $('#pf-families').innerHTML = FAMILIES.map(f => `<label class="chip"><input type="checkbox" value="${f.key}" ${p.families.includes(f.key) ? 'checked' : ''}> ${f.label}</label>`).join('');
@@ -442,7 +448,7 @@
       premium: $('#pf-premium').checked, focus: +$('#pf-focus').value || 0, bank: +$('#pf-bank').value || 0,
       reserve: +$('#pf-reserve').value || 0, mode: $('#pf-mode').value,
       multiCity: $('#pf-multi').checked, riskyOuting: $('#pf-risky').checked, salvageRound: $('#pf-salvround').value,
-      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, brecilienMinutes: $('#pf-brecmin').value === '' ? null : +$('#pf-brecmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45, goalPerDay: +$('#pf-goal').value || 0, progressShare: Math.max(0, Math.min(50, +$('#pf-prog').value || 0)) / 100,
+      travelMinutes: $('#pf-travelmin').value === '' ? 5 : +$('#pf-travelmin').value, brecilienMinutes: $('#pf-brecmin').value === '' ? null : +$('#pf-brecmin').value, travelMult: $('#pf-travel').value === '' ? 1 : +$('#pf-travel').value, minutes: +$('#pf-minutes').value || 45, goalPerDay: +$('#pf-goal').value || 0, mount: $('#pf-mount').value || null, baseLoad: $('#pf-baseload').value === '' ? null : +$('#pf-baseload').value, progressShare: Math.max(0, Math.min(50, +$('#pf-prog').value || 0)) / 100,
       cities: $$('#pf-cities input:checked').map(i => i.value), families: $$('#pf-families input:checked').map(i => i.value),
       stationFee: Object.fromEntries($$('[data-fee]').filter(i => i.value !== '').map(i => [i.dataset.fee, +i.value])),
       maxAge: +$('#pf-maxAge').value || 12, liqShare: (+$('#pf-liqShare').value || 15) / 100,

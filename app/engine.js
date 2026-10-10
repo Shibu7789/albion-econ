@@ -624,6 +624,13 @@
           n = Math.min(n, Math.floor((left[leftOf(l.id, l.city || o.city)] - (l.start || 0)) / l.effQty));
         }
         n = Math.min(n, Math.floor((Math.min(capital, capCap) - startCapital(o)) / o.cost));
+        // une ligne qui voyage doit tenir dans ta capacité de transport (poids officiels)
+        if (prof.carryKg > 0 && o.trips && o.trips.length) {
+          const wOf = id => { const it = items[index.get(id)]; return it && it.w ? it.w : 0; };
+          const per = Math.max(o.ingredients.reduce((s2, l) => s2 + l.effQty * wOf(l.id), 0),
+            o.salvage ? o.outputs.reduce((s2, x) => s2 + x.units * wOf(x.id), 0) : o.amount * wOf(o.id));
+          if (per > 0) n = Math.min(n, Math.floor((prof.carryKg - o.ingredients.reduce((s2, l) => s2 + (l.start || 0) * wOf(l.id), 0)) / per));
+        }
         if (o.useFocus) n = Math.min(n, o.focus > 0 ? Math.floor(focus / o.focus) : n);
         return Math.max(0, n);
       }
@@ -786,7 +793,24 @@
       const stops = found.path.filter(st => st.did.length).map((st, i, arr) => ({
         city: st.city, actions: st.did.map(i => acts[i]),
         next: arr[i + 1] ? { city: arr[i + 1].city, minutes: dist(st.city, arr[i + 1].city) } : null }));
-      return { stops, minutes: found.cost };
+      // Charge transportée à chaque départ (poids officiels des objets) : achats pas encore utilisés + production pas encore vendue
+      const W = id => { const it = items[index.get(id)]; return it && it.w ? it.w : 0; };
+      const hold = lines.map(() => new Map());                        // par ligne : id -> quantité en sac
+      const add = (li, id, q) => hold[li].set(id, (hold[li].get(id) || 0) + q);
+      let maxKg = 0;
+      for (const st of stops) {
+        for (const a of st.actions.slice().sort((x, y) => ({ buy: 0, make: 1, salvage: 1, sell: 2 })[x.type] - ({ buy: 0, make: 1, salvage: 1, sell: 2 })[y.type])) {
+          const l = lines[a.line];
+          if (a.type === 'buy') for (const g of a.items) add(a.line, g.id, buyQty(g, l.n));
+          else if (a.type === 'make') { hold[a.line].clear(); add(a.line, l.id, l.n * l.amount); }
+          else if (a.type === 'salvage') { hold[a.line].clear(); for (const x of l.outputs) add(a.line, x.id, x.units * l.n); }
+          else if (a.outputs) { for (const x of a.outputs) hold[a.line].delete(x.id); }
+          else hold[a.line].delete(l.id);
+        }
+        let kg = 0; for (const h of hold) for (const [id, q] of h) kg += q * W(id);
+        st.kg = kg; if (st.next) maxKg = Math.max(maxKg, kg);
+      }
+      return { stops, minutes: found.cost, maxKg };
     }
 
     /* ---------- Travailleurs ---------- */

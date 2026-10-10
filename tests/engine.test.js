@@ -365,4 +365,17 @@ t('journaux : renommée de craft et valeur ajoutée au profit (journal plein −
   const big = Object.assign({}, it, { e: 2 });
   near(E.journalGain(pr, big, rec, 'Martlock', prof).share, 4 * 4320 / 4800, 1e-9, '.2 : renommée ×4, 3,6 journaux');
 });
+t('transport : charge par trajet (poids officiels) et ligne limitée à la capacité', () => {
+  const ox = DATA.mounts.find(m => m.id === 'T8_MOUNT_OX');
+  const it = DATA.items[E.index.get('T8_MOUNT_OX')];
+  assert.ok(ox && ox.kg > 1000, 'bœuf T8 : ' + (ox && ox.kg) + ' kg');
+  const w = DATA.items[E.index.get('T5_CLOTH')].w;
+  const B = { id: 'T5_CLOTH', name: 'B', city: 'Lymhurst', sellVenue: 'Martlock', n: 100, amount: 1, kind: 4, flip: true,
+    ingredients: [{ id: 'T5_CLOTH', name: 'B', city: 'Lymhurst', effQty: 1 }] };
+  const r = E.route([B], Object.assign({}, prof, { travelMinutes: 5 }));
+  near(r.maxKg, 100 * w, 1e-9, 'charge = 100 tissus');
+  const o = Object.assign({}, B, { useFocus: false, profit: 1000, focus: 0, cost: 10, trips: ['Martlock'] });
+  const pl = E.plan([o], { T5_CLOTH: { Martlock: 1e6, Lymhurst: 1e6 } }, Object.assign({}, prof, { capital: 1e9, maxShare: 1, liqShare: 1, minutes: 100, minLineProfit: 0, carryKg: 50 * w, teleport: false }));
+  assert.strictEqual(pl.lines[0].n, 50, 'limité à la capacité');
+});
 console.log(n, 'tests OK');

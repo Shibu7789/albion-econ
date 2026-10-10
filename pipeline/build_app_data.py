@@ -173,6 +173,31 @@ for j in json.load(open(os.path.join(DUMP, 'items.json'), encoding='utf-8'))['it
     for x in v:
         if x and x.get('@id'): jmap[x['@id']] = [j['@uniquename'], float(m['@value'])]
 
+# ---------- Montures : charge supplémentaire = poids de la monture × facteur « maxload » de son sort (spells.json) ----------
+mounts = []
+try:
+    _it = json.load(open(os.path.join(DUMP, 'items.json'), encoding='utf-8'))['items']
+    _sp = json.load(open(os.path.join(DUMP, 'spells.json'), encoding='utf-8'))['spells']
+    _load = {}
+    for sp in _sp.get('activespell', []):
+        bo = sp.get('buffovertime'); bo = bo if isinstance(bo, list) else ([bo] if bo else [])
+        for b in bo:
+            if b.get('@type') == 'maxload': _load[sp['@uniquename']] = float(b['@value'])
+    _fr = {}
+    for t in json.load(open(os.path.join(DUMP, 'localization.json'), encoding='utf-8'))['tmx']['body']['tu']:
+        if t.get('@tuid', '').startswith('@ITEMS_') and 'MOUNT' in t['@tuid']:
+            for v in (t['tuv'] if isinstance(t.get('tuv'), list) else [t.get('tuv') or {}]):
+                if v.get('@xml:lang') == 'FR-FR': _fr[t['@tuid'][7:]] = v.get('seg')
+    for m in _it.get('mount', []):
+        f = _load.get(m.get('@halfmountedbuff')) or _load.get(m.get('@mountedbuff'))
+        if f and f > 0 and m.get('@weight') and m.get('@showinmarketplace') != 'false' and not m['@uniquename'].startswith('UNIQUE'):
+            mounts.append({'id': m['@uniquename'], 'n': _fr.get(m['@uniquename']) or m['@uniquename'], 'kg': round(float(m['@weight']) * f)})
+    mounts.sort(key=lambda x: x['kg'])
+    _ch = json.load(open(os.path.join(DUMP, 'characters.json'), encoding='utf-8'))
+    base_load = float(re.search(r'"@maxload":\s*"([\d.]+)"', json.dumps(_ch)).group(1))
+except FileNotFoundError:
+    base_load = None
+
 # ---------- Tier débloqué selon le niveau du nœud de base (colonne UnlockTier des modèles officiels) ----------
 unlock = {}
 for t in json.load(open(os.path.join(DUMP, 'achievements.json'), encoding='utf-8'))['achievements']['template']:
@@ -212,7 +237,7 @@ def dump_version():
 
 data = {
     'version': dump_version(),
-    'unlock': unlock, 'jmap': jmap, 'items': items, 'nodes': node_list, 'bonus': {str(k): v for k, v in bonus.items()},
+    'unlock': unlock, 'jmap': jmap, 'mounts': mounts, 'baseLoad': base_load, 'items': items, 'nodes': node_list, 'bonus': {str(k): v for k, v in bonus.items()},
     'cities': {c: {'raff': lieux[c]['bonus_raffinage'], 'craft': lieux[c]['bonus_craft'], 'spe': lieux[c]['specialites']} for c in CITIES if c in lieux},
     'farm': farm, 'farmBonus': farm_bonus, 'laborers': J('travailleurs.json'), 'journals': J('carnets.json'),
     'houses': J('maisons.json'), 'npc': J('pnj_prix_fixe.json'), 'consts': consts,

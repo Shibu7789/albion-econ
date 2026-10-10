@@ -19,6 +19,7 @@ Rapport complet : document « Économie d'Albion Online — fonctionnement compl
 | Renommée de craft | Σ ressources raffinées de la recette × renommée par ressource (T4 22,5 · T5 90 · T6 270 · T7 645 · T8 1 395, ×2 par enchantement) | Source tierce, à recouper en jeu | albiononlinegrind.com « Item Crafting Fame » |
 | Journaux d'artisan | un craft remplit le journal de son tier listé dans famefillingmissions ; renommée requise = valeur officielle (T6 : 4 800) ; seule la renommée de base compte (pas le Premium) ; journaux par craft = renommée du craft ÷ renommée requise ; valeur = (prix plein − prix vide) × ce nombre | Officielle (liste, requis) + wiki (Premium) | items.json journalitem ; wiki « Journal » |
 | Prix d'achat prudent | max(prix actuel, prix moyen payé sur 7 jours) : l'API ne donne pas la profondeur du carnet | Choix de prudence | API AODP history |
+| Charge de transport | bonus d'une monture = poids de la monture × facteur « maxload » de son sort ; charge de base du personnage 50 (sans sac) ; charge d'un trajet = Σ quantités en sac × poids officiel | Officielle | items.json (mount weight), spells.json (maxload), characters.json |
 | Travailleurs | butin = quantité de base × chances officielles d'enchantement | Officielle ; effet du bonheur **inconnu** | items.json (journalitem) |
 
 ## Inconnues à mesurer en jeu
