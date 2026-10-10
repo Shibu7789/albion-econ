@@ -186,9 +186,63 @@
     const bm = p.riskyOuting && pl.bm && pl.bm.lines.length ? `<details class="city risky"><summary><h3 style="display:inline">Option : sortie risquée <span class="muted">Caerleon, Black Market · en groupe, une fois par semaine</span></h3></summary>
       <p class="muted small">Hors liste du jour : ces lignes ne comptent ni dans ton capital engagé, ni dans ton profit prévu. Ne les fais qu'avec l'argent qui reste après ta liste du jour. Quantités calculées sur une semaine de ventes. Seraient engagés : ${fmtK(pl.bm.capitalUsed)} pour ${fmtK(pl.bm.totalProfit)} prévus.</p>
       ${pl.bm.lines.map((l, k) => lineHTML(l, 'bm' + k, p)).join('')}</details>` : '';
-    box.innerHTML = Object.entries(byCity).map(([city, ls]) => `
+    box.innerHTML = tourHTML(pl, p) + `<details class="detail"><summary><h3 style="display:inline">Détail de chaque ligne</h3> <span class="muted">calculs, investissement, volumes</span></summary>` +
+      Object.entries(byCity).map(([city, ls]) => `
       <section class="city"><h3>${esc(city)} <span class="muted">${ls.length} ligne${ls.length > 1 ? 's' : ''}</span></h3>
-      ${ls.map(([l, i]) => lineHTML(l, i, p)).join('')}</section>`).join('') + bm;
+      ${ls.map(([l, i]) => lineHTML(l, i, p)).join('')}</section>`).join('') + `</details>` + bm;
+  }
+
+  // Tournée : une liste de tâches par ville, dans l'ordre qui évite les allers-retours
+  const tierOf = id => { const it = DATA.items[E.index.get(id)]; return it ? ` <span class="tier">T${it.t}${it.e ? '.' + it.e : ''}</span>` : ''; };
+  const sellPrice = (l, p) => l.unitSell / (1 - E.salesTax(p) - (p.mode === 'orders' && l.sellVenue !== 'Black Market' ? DATA.consts.setupFee : 0));
+  const ORDER = { buy: 0, make: 1, salvage: 1, sell: 2 };
+  function tourHTML(pl, p) {
+    const r = E.route(pl.lines, p);
+    if (!r.stops.length) return '';
+    const buyVerb = p.mode === 'orders' ? 'Poser un ordre d\'achat' : 'Acheter';
+    const name = l => `${esc(l.name)}${l.ench ? ' <span class="tier">T' + l.tier + '.' + l.ench + '</span>' : ' <span class="tier">T' + l.tier + '</span>'}`;
+    const act = a => {
+      const l = pl.lines[a.line], i = a.line;
+      if (a.type === 'buy') return '';                         // regroupés par objet (voir buyRows)
+      if (a.type === 'salvage') return `<li><b>Recycler</b> <span class="q">${fmt(l.n)}</span> ${name(l)} <span class="gainmini">+${fmtK(l.totalProfit)}</span> <button class="ghost real small" data-start="${i}">Mis en vente</button></li>`;
+      if (a.type === 'make') {
+        const pre = l.chain && l.chain.length ? l.chain.map(st => `${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'} <span class="q">${fmt(Math.ceil(st.qty * l.n + (st.start || 0) - 1e-9))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span>${st.focus ? ' au focus' : ''}`).join(', puis ') + ', puis ' : '';
+        const verb = l.kind === 3 ? 'Améliorer' : l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter';
+        return `<li>${pre ? '<span class="muted">' + pre + '</span>' : ''}<b>${verb}</b> <span class="q">${fmt(l.n)}</span> × ${name(l)}${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}</li>`;
+      }
+      const bm = a.city === 'Black Market';
+      const verb = p.mode === 'orders' && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
+      if (a.outputs) return '';                                // regroupés par objet (voir outRows)
+      return `<li><b>${verb}</b> <span class="q">${fmt(l.n * l.amount)}</span> × ${name(l)} <span class="muted">à ${fmt(sellPrice(l, p))}</span> <span class="gainmini">+${fmtK(l.totalProfit)}</span> <button class="ghost real small" data-start="${i}">Mis en vente</button></li>`;
+    };
+    // achats d'un même objet pour plusieurs lignes : une seule ligne, quantité totale, prix max le plus bas
+    function buyRows(st) {
+      const m = new Map();
+      for (const a of st.actions) if (a.type === 'buy') {
+        const l = pl.lines[a.line];
+        for (const g of a.items) {
+          const x = m.get(g.id) || { g, q: 0, price: Infinity, uses: [] };
+          x.q += E.buyQty(g, l.n); x.price = Math.min(x.price, g.price);
+          x.uses.push(l.salvage ? 'à recycler' : l.flip ? 'à revendre' : l.id === g.id ? '' : 'pour ' + esc(l.name));
+          m.set(g.id, x);
+        }
+      }
+      return [...m.values()].map(x => { const u = [...new Set(x.uses.filter(Boolean))];
+        return `<li><b>${buyVerb}</b> <span class="q">${fmt(x.q)}</span> ${esc(x.g.name)}${tierOf(x.g.id)} <span class="muted">à ${fmt(x.price)} max${u.length ? ' · ' + (u.length > 2 ? u.length + ' lignes' : u.join(', ')) : ''}</span></li>`; }).join('');
+    }
+    // matières issues du recyclage : une ligne par objet
+    function outRows(st) {
+      const m = new Map();
+      for (const a of st.actions) if (a.type === 'sell' && a.outputs) {
+        const l = pl.lines[a.line];
+        for (const x of a.outputs) { const y = m.get(x.id) || { x, q: 0 }; y.q += x.units * l.n; m.set(x.id, y); }
+      }
+      return [...m.values()].map(({ x, q }) => `<li><b>Vendre</b> <span class="q">${fmt(q)}</span> ${esc(x.name)}${tierOf(x.id)} <span class="muted">· issu du recyclage</span></li>`).join('');
+    }
+    return `<section class="tour"><h3>Ta tournée <span class="muted">${r.stops.length} arrêt${r.stops.length > 1 ? 's' : ''} · ${fmt(r.minutes)} min de trajets</span></h3>
+      <ol class="stops">${r.stops.map((st, k) => `<li class="stop"><h4>${esc(st.city === 'Black Market' ? 'Black Market (Caerleon)' : st.city)}</h4>
+        <ul class="tasks">${buyRows(st)}${st.actions.slice().sort((a, b) => ORDER[a.type] - ORDER[b.type]).map(act).join('')}${outRows(st)}</ul>
+        ${st.next ? `<p class="go">→ Aller à <b>${esc(st.next.city)}</b> <span class="muted">≈ ${fmt(st.next.minutes)} min${st.next.city === 'Brecilien' || st.city === 'Brecilien' ? ' · par une brume en zone jaune' : ' · Travel Planner, voyage gratuit (ou téléportation si une ligne l\'indique)'}</span></p>` : ''}</li>`).join('')}</ol></section>`;
   }
 
   // Travel Planner : voyage gratuit (temps de trajet) ou téléportation instantanée payée au poids

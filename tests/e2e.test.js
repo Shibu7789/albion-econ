@@ -107,7 +107,7 @@ function fakeHistory(url) {
   console.log('OK largeur téléphone');
   await page.click('[data-tab="today"]');
   await page.setViewportSize({ width: 1200, height: 900 });
-  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: false });
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT, fullPage: !!process.env.FULL });
   assert.deepStrictEqual(errors, [], 'erreurs JavaScript : ' + errors.join(' | '));
   console.log('OK aucune erreur JavaScript');
   await browser.close();

@@ -637,6 +637,67 @@
                minutesUsed: prof.minutes - minutes, route: [...visited] };
     }
 
+    /* ---------- Tournée : actions regroupées par ville, ordre qui minimise les déplacements ---------- */
+    // Chaque ligne = achats (une action par ville d'achat) → fabrication / recyclage (ville de craft) → vente(s).
+    // Recherche à coût uniforme sur (ville, actions faites) : à chaque arrêt on fait tout ce qui est faisable.
+    // Trajet entre villes royales = travelMinutes ; vers ou depuis Brecilien = moitié de son aller-retour.
+    function route(lines, prof) {
+      const travel = prof.travelMinutes != null ? prof.travelMinutes : 5;
+      const brec = prof.brecilienMinutes != null ? prof.brecilienMinutes : travel;
+      const dist = (a, b) => a === b ? 0 : (a === 'Brecilien' || b === 'Brecilien') ? brec / 2 : travel;
+      const acts = [];
+      lines.forEach((l, li) => {
+        const buyIdx = [];
+        const byCity = new Map();
+        l.ingredients.forEach(g => { if (g.city === 'Île') return; const c = g.city || l.city; if (!byCity.has(c)) byCity.set(c, []); byCity.get(c).push(g); });
+        for (const [c, gs] of byCity) { buyIdx.push(acts.length); acts.push({ type: 'buy', city: c, line: li, items: gs, pre: [] }); }
+        let last = buyIdx;
+        if (!l.flip) { const m = acts.length; acts.push({ type: l.salvage ? 'salvage' : 'make', city: l.city, line: li, pre: buyIdx }); last = [m]; }
+        const venues = l.salvage ? [...new Set(l.outputs.map(x => x.venue))] : [l.sellVenue];
+        for (const v of venues) acts.push({ type: 'sell', city: v, line: li, pre: last,
+          outputs: l.salvage ? l.outputs.filter(x => x.venue === v) : null });
+      });
+      const N = acts.length;
+      if (!N) return { stops: [], minutes: 0 };
+      const cities = [...new Set(acts.map(a => a.city))];
+      const full = (1n << BigInt(N)) - 1n;
+      const bit = i => 1n << BigInt(i);
+      function closure(city, done) {
+        const did = [];
+        for (let changed = true; changed;) {
+          changed = false;
+          for (let i = 0; i < N; i++) {
+            if (done & bit(i) || acts[i].city !== city) continue;
+            if (acts[i].pre.every(j => done & bit(j))) { done |= bit(i); did.push(i); changed = true; }
+          }
+        }
+        return { done, did };
+      }
+      // file de priorité simple (petites tailles)
+      const open = [], best = new Map();
+      for (const c of cities) { const r = closure(c, 0n); open.push({ cost: 0, city: c, done: r.done, path: [{ city: c, did: r.did }] }); }
+      let found = null, guard = 0;
+      while (open.length && guard++ < 50000) {
+        let k = 0; for (let i = 1; i < open.length; i++) if (open[i].cost < open[k].cost) k = i;
+        const cur = open.splice(k, 1)[0];
+        if (cur.done === full) { found = cur; break; }
+        const key = cur.city + '|' + cur.done.toString(36);
+        if (best.has(key) && best.get(key) <= cur.cost) continue;
+        best.set(key, cur.cost);
+        for (const c of cities) {
+          if (c === cur.city) continue;
+          const r = closure(c, cur.done);
+          if (!r.did.length) continue;                       // n'aller que là où quelque chose devient faisable
+          open.push({ cost: cur.cost + dist(cur.city, c), city: c, done: r.done, path: cur.path.concat([{ city: c, did: r.did }]) });
+        }
+      }
+      if (!found) return { stops: [], minutes: 0, failed: true };
+      const stops = found.path.filter(st => st.did.length).map((st, i, arr) => ({
+        city: st.city, actions: st.did.map(i => acts[i]),
+        next: arr[i + 1] ? { city: arr[i + 1].city, minutes: dist(st.city, arr[i + 1].city) } : null }));
+      return { stops, minutes: found.cost };
+    }
+
     /* ---------- Travailleurs ---------- */
     // Valeur espérée du butin d'un carnet plein, au prix du jour (quantité de base du jeu).
     function journalValue(prices, journalId, city, prof) {
@@ -656,7 +717,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, applyHistory, tcost, tpCost, buyQty, startCapital, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, applyHistory, tcost, tpCost, buyQty, startCapital, route, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

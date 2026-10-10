@@ -320,4 +320,17 @@ t('retour de ressources : il faut le stock complet du 1er craft, le retour arriv
   near(l.totalCost, l.n * o.cost + E.startCapital(o), 1e-6, 'capital : stock de départ compris');
   assert.ok(l.stockCost > 0);
 });
+t('tournée : actions groupées par ville, ordre au plus court, achats avant craft avant vente', () => {
+  const A = { id: 'A', name: 'A', city: 'Lymhurst', sellVenue: 'Lymhurst', n: 1, amount: 1, kind: 0,
+    ingredients: [{ id: 'X', name: 'X', city: 'Martlock', effQty: 1 }] };
+  const B = { id: 'B', name: 'B', city: 'Lymhurst', sellVenue: 'Martlock', n: 1, amount: 1, kind: 4, flip: true,
+    ingredients: [{ id: 'B', name: 'B', city: 'Lymhurst', effQty: 1 }] };
+  const r = E.route([A, B], Object.assign({}, prof, { travelMinutes: 5 }));
+  near(r.minutes, 10, 1e-9, 'deux trajets');
+  assert.strictEqual(r.stops.length, 3, 'trois arrêts');
+  const order = r.stops.flatMap(s => s.actions.map(a => a.line + a.type));
+  assert.ok(order.indexOf('0buy') < order.indexOf('0make') && order.indexOf('0make') < order.indexOf('0sell'), 'A dans l\'ordre');
+  assert.ok(order.indexOf('1buy') < order.indexOf('1sell'), 'B dans l\'ordre');
+  assert.ok(r.stops.every(s => s.actions.every(a => a.city === s.city)), 'chaque action dans sa ville');
+});
 console.log(n, 'tests OK');
