@@ -122,6 +122,8 @@
         if (it.tr && doSalv && it.sv) { need.add(it.id); it.sv[2].forEach(([ii]) => need.add(DATA.items[ii].id)); }
         if (!it.tr || !filt(it)) return;
         need.add(it.id);
+        const jj = DATA.jmap && DATA.jmap[it.id.split('@')[0]];
+        if (jj && p.journals !== false) { need.add(jj[0] + '_FULL'); need.add(jj[0] + '_EMPTY'); }
         (it.r || []).forEach(r => r[4].forEach(([ii]) => need.add(DATA.items[ii].id)));
         if (it.up) { need.add(DATA.items[it.up[0]].id); it.up[1].forEach(([ii]) => need.add(DATA.items[ii].id)); }
       });
@@ -226,6 +228,9 @@
 
   // Tournée : une liste de tâches par ville, dans l'ordre qui évite les allers-retours
   const tierOf = id => { const it = DATA.items[E.index.get(id)]; return it ? ` <span class="tier">T${it.t}${it.e ? '.' + it.e : ''}</span>` : ''; };
+  const JTYPE = { WARRIOR: 'Guerrier (forgeron)', HUNTER: 'Chasseur (archer-fabricant)', MAGE: 'Mage (enchanteur)', TOOLMAKER: 'Outilleur' };
+  const journalName = id => { const m = /^T(\d)_JOURNAL_(\w+)$/.exec(id); return m ? `journal ${JTYPE[m[2]] || m[2]} T${m[1]}` : id; };
+  const journalTxt = l => l.journal ? `prends <b>${fmt(Math.ceil(l.journal.share * l.n))}</b> ${journalName(l.journal.id)} vide${l.journal.share * l.n > 1 ? 's' : ''} (≈ ${fmt(l.journal.empty)}) et revends-les pleins (≈ ${fmt(l.journal.full)}) : +${fmtK(l.journal.value * l.n)}` : '';
   const signK = v => (v >= 0 ? '+' : '−') + fmtK(Math.abs(v));
   const sellPrice = (l, p) => l.unitSell / (1 - E.salesTax(p) - (E.sellByOrder(p) && l.sellVenue !== 'Black Market' ? DATA.consts.setupFee : 0));
   const ORDER = { buy: 0, make: 1, salvage: 1, sell: 2 };
@@ -241,7 +246,7 @@
       if (a.type === 'make') {
         const pre = l.chain && l.chain.length ? l.chain.map(st => `${st.kind === 2 ? 'Transmuter' : st.kind === 1 ? 'Raffiner' : 'Crafter'} <span class="q">${fmt(Math.ceil(st.qty * l.n + (st.start || 0) - 1e-9))}</span> ${esc(st.name)} <span class="tier">T${st.tier}${st.ench ? '.' + st.ench : ''}</span>${st.focus ? ' au focus' : ''}`).join(', puis ') + ', puis ' : '';
         const verb = l.kind === 3 ? 'Améliorer' : l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter';
-        return `<li>${pre ? '<span class="muted">' + pre + '</span>' : ''}<b>${verb}</b> <span class="q">${fmt(l.n)}</span> × ${name(l)}${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}${l.prog ? ` <span class="muted">· sans focus, monte ${esc(l.levels[0].name)}</span>` : ''}</li>`;
+        return `<li>${pre ? '<span class="muted">' + pre + '</span>' : ''}<b>${verb}</b> <span class="q">${fmt(l.n)}</span> × ${name(l)}${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}</span>` : ''}${l.prog ? ` <span class="muted">· sans focus, monte ${esc(l.levels[0].name)}</span>` : ''}${l.journal ? `<br><span class="muted">Journaux : ${journalTxt(l)}</span>` : ''}</li>`;
       }
       const bm = a.city === 'Black Market';
       const verb = E.sellByOrder(p) && !bm ? 'Poser un ordre de vente' : 'Vendre directement';
@@ -304,7 +309,7 @@
           : l.kind === 4 ? (l.sellVenue === 'Black Market' ? `<li><b>Transporter</b> vers le Black Market (Caerleon)</li>` : '')
           : l.kind === 3 ? `<li><b>Améliorer</b> ${fmt(l.n)} fois à la station de la pièce</li>`
           : `<li><b>${l.kind === 2 ? 'Transmuter' : l.kind === 1 ? 'Raffiner' : 'Crafter'}</b> ${fmt(l.n)} fois${l.useFocus ? ` <span class="pill focus">focus ${fmt(l.totalFocus)}${l.useFocus === 'all' ? ', toute la chaîne' : ''}</span>` : ''}
-          ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}</li>`}
+          ${l.rrr ? `<span class="muted">retour de ressources ${Math.round(l.rrr * 1000) / 10} %</span>` : ''}${l.journal ? `<br><span class="muted">Journaux : ${journalTxt(l)} (renommée ${fmt(l.journal.fame)} par craft, compte la renommée de base, sans Premium)</span>` : ''}</li>`}
         ${moveHTML(l, p)}
         ${l.salvage ? '' : `<li><b>${sellVerb}</b> ${fmt(l.n * l.amount)} × à ${fmt(l.unitSell / (1 - E.salesTax(p) - (E.sellByOrder(p) && !bm ? DATA.consts.setupFee : 0)))} <span class="muted">${l.sellVenue === 'Black Market' ? 'au Black Market (Caerleon)' : l.sellVenue !== l.city ? '<b>à ' + esc(l.sellVenue) + '</b>' : ''}</span>${l.capped ? ' <span class="pill">prix ramené à la moyenne des 7 jours</span>' : ''}${l.quality ? ' <span class="pill">bonus si meilleure qualité</span>' : ''}</li>`}
       </ol>

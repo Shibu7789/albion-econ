@@ -164,6 +164,15 @@ for ni, n in enumerate(nodes):
                     if tmin <= it['tier'] <= tmax:
                         bonus[index[mid]].append([ni, round(b['valeur_par_niveau'] * 100, 4), TYPE[b['type']]])
 
+# ---------- Journaux d'artisan : quel craft remplit quel journal, renommée requise (famefillingmissions officielles) ----------
+jmap = {}
+for j in json.load(open(os.path.join(DUMP, 'items.json'), encoding='utf-8'))['items'].get('journalitem', []):
+    m = (j.get('famefillingmissions') or {}).get('craftitemfame')
+    if not m: continue
+    v = m.get('validitem'); v = v if isinstance(v, list) else [v]
+    for x in v:
+        if x and x.get('@id'): jmap[x['@id']] = [j['@uniquename'], float(m['@value'])]
+
 # ---------- Tier débloqué selon le niveau du nœud de base (colonne UnlockTier des modèles officiels) ----------
 unlock = {}
 for t in json.load(open(os.path.join(DUMP, 'achievements.json'), encoding='utf-8'))['achievements']['template']:
@@ -203,7 +212,7 @@ def dump_version():
 
 data = {
     'version': dump_version(),
-    'unlock': unlock, 'items': items, 'nodes': node_list, 'bonus': {str(k): v for k, v in bonus.items()},
+    'unlock': unlock, 'jmap': jmap, 'items': items, 'nodes': node_list, 'bonus': {str(k): v for k, v in bonus.items()},
     'cities': {c: {'raff': lieux[c]['bonus_raffinage'], 'craft': lieux[c]['bonus_craft'], 'spe': lieux[c]['specialites']} for c in CITIES if c in lieux},
     'farm': farm, 'farmBonus': farm_bonus, 'laborers': J('travailleurs.json'), 'journals': J('carnets.json'),
     'houses': J('maisons.json'), 'npc': J('pnj_prix_fixe.json'), 'consts': consts,

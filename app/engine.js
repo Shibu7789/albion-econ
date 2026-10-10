@@ -225,6 +225,27 @@
       return item.v * amount * C.nutritionFactor * per100 / 100;
     }
 
+    /* ---------- Journaux d'artisan remplis par le craft ---------- */
+    // Renommée d'un craft = Σ ressources raffinées de la recette × renommée par ressource (selon tier, ×2 par enchantement).
+    // Table par ressource : source tierce (albiononlinegrind.com, « Item Crafting Fame ») — à recouper en jeu.
+    const FAME_PER_RES = { 4: 22.5, 5: 90, 6: 270, 7: 645, 8: 1395 };
+    const RES_RE = /_(METALBAR|PLANKS|CLOTH|LEATHER|STONEBLOCK)(_LEVEL\d)?(@\d)?$/;
+    function craftFame(item, recipe) {
+      const f = FAME_PER_RES[item.t]; if (!f) return 0;
+      let n = 0; for (const [ii, qty] of recipe[4]) if (RES_RE.test(items[ii].id)) n += qty;
+      return n * f * Math.pow(2, item.e || 0);
+    }
+    // Valeur des journaux remplis par un craft : (prix du journal plein − prix du vide) × part remplie.
+    // Renommée requise : famefillingmissions officielles. Prudence : au plus un journal par craft (débordement non confirmé).
+    function journalGain(prices, item, recipe, city, prof) {
+      const j = (DATA.jmap || {})[item.id.split('@')[0]]; if (!j) return null;
+      const fame = craftFame(item, recipe); if (!(fame > 0)) return null;
+      const full = dispose(prices, j[0] + '_FULL', city, prof), empty = acquire(prices, j[0] + '_EMPTY', city, prof);
+      if (full == null || empty == null || !(full > empty)) return null;
+      const share = prof.journalOverflow ? fame / j[1] : Math.min(1, fame / j[1]);
+      return { id: j[0], fame, share, value: share * (full - empty), full, empty };
+    }
+
     function evaluate(prices, itemIdx, recipe, kind, city, useFocus, prof) {
       const item = items[itemIdx];
       const [silver, focusBase, amount, , ings] = recipe;
@@ -252,7 +273,8 @@
       cost += stationFee(item, amount, city, prof);
       const best = bestSell(prices, item.id, city, prof);
       if (!best) return null;
-      const revenue = best.net * amount;
+      const jg = kind === 0 && prof.journals !== false ? journalGain(prices, item, recipe, city, prof) : null;
+      const revenue = best.net * amount + (jg ? jg.value : 0);
       const fpts = useFocus ? fce(itemIdx, prof.specs, 'f') : 0;
       const focus = (useFocus ? focusCost(focusBase, fpts) : 0) + chainFocus;
       if (useFocus === 'all' && !(chainFocus > 0)) return null;    // rien à focaliser en amont : doublon de « final »
@@ -260,7 +282,7 @@
         itemIdx, id: item.id, name: item.n, tier: item.t, ench: item.e, kind, kindLabel: KIND_LABEL[kind],
         city, sellVenue: best.venue, useFocus, amount, rrr: R, cost, revenue, profit: revenue - cost,
         margin: cost > 0 ? (revenue - cost) / cost : 0, focus, ingredients: mergeLines(lines), chain: mergeSteps(chain),
-        unitSell: best.net, quality: item.q > 1,
+        unitSell: best.net, quality: item.q > 1, jv: jg ? jg.value : 0, journal: jg,
       };
     }
 
@@ -548,7 +570,7 @@
           return Object.assign({}, l, { price: b.raw, city: b.city });
         });
         if (!ok) continue;
-        const revenue = best.net * o.amount, profit = revenue - cost;
+        const revenue = best.net * o.amount + (o.jv || 0), profit = revenue - cost;
         if (profit > 0 && profit / cost >= prof.minMargin)
           out.push(withTrips(Object.assign({}, o, { sellVenue: best.venue, unitSell: best.net, revenue, cost, profit,
             margin: profit / cost, ingredients: lines, capped: best.capped }), prof));
@@ -785,7 +807,7 @@
     function b_amount(j) { return j.butin.some(b => b.argent) ? 1 : j.quantite_base; }
 
     return { items, index, fce, focusCost, rrr, productionBonus, evaluate, evaluateUpgrade, opportunities,
-             maxCrafts, plan, sellByOrder, buyByOrder, applyHistory, tcost, tpCost, buyQty, startCapital, route, tierCap, nodesToLevel, progressionCandidates, progressionPick, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
+             maxCrafts, plan, sellByOrder, buyByOrder, applyHistory, tcost, tpCost, buyQty, startCapital, route, tierCap, nodesToLevel, craftFame, journalGain, progressionCandidates, progressionPick, plotValue, flips, salvages, salvageEval, journalValue, acquire, dispose, bestBuy, bestSell, salesTax, CITIES, KIND_LABEL };
   }
 
   const api = { createEngine, CITIES };

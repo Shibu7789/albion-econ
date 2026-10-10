@@ -354,4 +354,15 @@ t('progression : budget respecté, objets vendus seulement, nœuds non maximaux'
   assert.strictEqual(pick[0].n, 50, 'budget 50 000 / 1 000');
   assert.strictEqual(E.progressionPick([o], { I: vol.I }, prof, 50000).length, 0, 'sans ventes : écarté');
 });
+t('journaux : renommée de craft et valeur ajoutée au profit (journal plein − vide)', () => {
+  const idx = E.index.get('T6_ARMOR_PLATE_SET1'); const it = DATA.items[idx];
+  const rec = it.r.find(r => r[3] === 0);
+  near(E.craftFame(it, rec), 16 * 270, 1e-9, '16 barres T6 × 270');
+  const j = DATA.jmap.T6_ARMOR_PLATE_SET1; assert.strictEqual(j[0], 'T6_JOURNAL_WARRIOR'); assert.strictEqual(j[1], 4800);
+  const pr = { T6_JOURNAL_WARRIOR_FULL: { Martlock: P(30000, 28000) }, T6_JOURNAL_WARRIOR_EMPTY: { Martlock: P(9000, 8000) } };
+  const g = E.journalGain(pr, it, rec, 'Martlock', prof);
+  near(g.share, 4320 / 4800, 1e-9); near(g.value, 4320 / 4800 * (28000 * 0.92 - 9000), 1e-6);
+  const big = Object.assign({}, it, { e: 2 });
+  near(E.journalGain(pr, big, rec, 'Martlock', prof).share, 1, 1e-9, 'au plus un journal par craft');
+});
 console.log(n, 'tests OK');
