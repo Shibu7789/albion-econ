@@ -1,5 +1,13 @@
 # Journal des mises à jour
 
+## 2026-11-09 — routine hebdomadaire
+
+- Données du jeu passées du 12/10/2026 au 02/11/2026 (ao-bin-dumps, commit 0483dd9, Dragonfire Patch 4).
+- Contenu de `data.js` identique : aucun objet, recette, focus, bonus de ville ni taxe ajouté, retiré ou modifié.
+- Notes de mise à jour du 12/10 au 09/11 (Dragonfire Patch 4 du 02/11, événement Allhallows) : butin des Terres
+  anciennes et des dragons, montures, équilibrage des armes, soins des potions de vie ; aucune mécanique utilisée
+  par l'outil ne change. Forum officiel non joignable depuis le cloud, lecture faite via patchbot.io et patched.gg.
+
 ## 2026-10-19 — routine hebdomadaire
 
 - Données du jeu passées du 23/09/2026 au 12/10/2026 (ao-bin-dumps, commit 1a469e5, Dragonfire Patch 3).
